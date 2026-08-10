@@ -20,6 +20,7 @@ import {
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { VERIFIED_EMAIL } from './verified';
+import { filterByViewerAccess, canViewTier, normalizeTier } from './accessTier';
 
 // Reuse akun terverifikasi sebagai satu-satunya admin yang boleh upload.
 export const ADMIN_EMAIL = VERIFIED_EMAIL;
@@ -52,12 +53,22 @@ export const normalizeCustomAnime = (docSnap) => {
     episodes: (data.episodes || []).length,
     episodeList: data.episodes || [],
     provider: 'custom',
+    // 'free' = semua orang, 'premium' = hanya user premium/admin.
+    accessTier: normalizeTier(data.accessTier),
     createdAt: data.createdAt || null,
   };
 };
 
-/** Ambil semua anime custom (dipakai admin panel & untuk digabung ke home/search). */
-export const listCustomAnime = async () => {
+/**
+ * Ambil semua anime custom.
+ * Secara default hasilnya sudah difilter sesuai tier penonton — anime premium
+ * tidak akan pernah ikut untuk user biasa. Admin panel memakai
+ * `listAllCustomAnime()` supaya tetap melihat semuanya.
+ */
+export const listCustomAnime = async () => filterByViewerAccess(await listAllCustomAnime());
+
+/** Versi tanpa filter tier — khusus admin panel. */
+export const listAllCustomAnime = async () => {
   const snap = await getDocs(query(collection(db, COLLECTION), orderBy('createdAt', 'desc')));
   return snap.docs.map(normalizeCustomAnime);
 };
@@ -68,7 +79,7 @@ export const listCustomAnimeByStatus = async (status) => {
     const snap = await getDocs(
       query(collection(db, COLLECTION), where('status', '==', status), orderBy('createdAt', 'desc')),
     );
-    return snap.docs.map(normalizeCustomAnime);
+    return filterByViewerAccess(snap.docs.map(normalizeCustomAnime));
   } catch {
     // Fallback kalau index composite belum ada — filter di client.
     const all = await listCustomAnime();
@@ -80,7 +91,11 @@ export const listCustomAnimeByStatus = async (status) => {
 export const getCustomAnime = async (id) => {
   if (!id) return null;
   const snap = await getDoc(doc(db, COLLECTION, id));
-  return snap.exists() ? normalizeCustomAnime(snap) : null;
+  if (!snap.exists()) return null;
+  const anime = normalizeCustomAnime(snap);
+  // Anime premium disembunyikan total dari user biasa (dianggap tidak ada).
+  if (!canViewTier(anime.accessTier)) return null;
+  return anime;
 };
 
 /**
@@ -94,6 +109,7 @@ export const addCustomAnime = async (payload, adminUser) => {
     poster: payload.poster || '',
     description: (payload.description || '').trim(),
     status: payload.status === 'completed' ? 'completed' : 'ongoing',
+    accessTier: normalizeTier(payload.accessTier),
     type: payload.type || 'TV',
     aired: (payload.aired || '').trim(),
     duration: (payload.duration || '').trim(),
@@ -115,6 +131,7 @@ export const updateCustomAnime = async (id, payload) => {
     poster: payload.poster || '',
     description: (payload.description || '').trim(),
     status: payload.status === 'completed' ? 'completed' : 'ongoing',
+    accessTier: normalizeTier(payload.accessTier),
     type: payload.type || 'TV',
     aired: (payload.aired || '').trim(),
     duration: (payload.duration || '').trim(),
