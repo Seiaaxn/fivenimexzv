@@ -34,6 +34,7 @@ const Watch = () => {
   const [switchLabel, setSwitchLabel] = useState('');
   const [videoFailed, setVideoFailed] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const videoElRef = useRef(null);
   const saveTimerRef = useRef(null);
   const savedTimeRef = useRef(0);
@@ -342,6 +343,48 @@ const Watch = () => {
     };
   }, []);
 
+  // ─── Indikator buffering + anti-stall ───
+  // Beberapa server streaming sering "menggantung" beberapa detik. Kita
+  // tampilkan indikator halus (bukan blocking) dan otomatis memancing
+  // browser melanjutkan buffer ketika video stall terlalu lama.
+  useEffect(() => {
+    const vid = videoElRef.current;
+    if (!vid || !videoUrl) return;
+
+    let stallTimer = null;
+    const clearStall = () => { if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } };
+
+    const onWaiting = () => {
+      setBuffering(true);
+      clearStall();
+      // Kalau masih stuck > 6 detik, nudge posisi play agar buffer jalan lagi.
+      stallTimer = setTimeout(() => {
+        try {
+          if (vid.readyState < 3 && !vid.paused) {
+            vid.currentTime = Math.max(0, vid.currentTime - 0.1);
+            vid.play?.().catch(() => {});
+          }
+        } catch { /* ignore */ }
+      }, 6000);
+    };
+    const onPlaying = () => { setBuffering(false); clearStall(); };
+    const onCanPlay = () => { setBuffering(false); clearStall(); };
+
+    vid.addEventListener('waiting', onWaiting);
+    vid.addEventListener('stalled', onWaiting);
+    vid.addEventListener('playing', onPlaying);
+    vid.addEventListener('canplay', onCanPlay);
+    vid.addEventListener('canplaythrough', onCanPlay);
+    return () => {
+      clearStall();
+      vid.removeEventListener('waiting', onWaiting);
+      vid.removeEventListener('stalled', onWaiting);
+      vid.removeEventListener('playing', onPlaying);
+      vid.removeEventListener('canplay', onCanPlay);
+      vid.removeEventListener('canplaythrough', onCanPlay);
+    };
+  }, [videoUrl]);
+
   // ─── Anti-ads ───
   useEffect(() => {
     const adP = ['doubleclick.net', 'googlesyndication.com', 'popads.net', 'popcash.net', 'adsterra.com', 'exoclick.com'];
@@ -451,6 +494,12 @@ const Watch = () => {
       {/* Video Player */}
       <div className="video-player-wrapper" style={{ position: 'relative' }}>
         {switching && <WatchLoading message="Mengganti server..." serverName={switchLabel} />}
+        {!switching && buffering && (
+          <div className="watch-buffering" role="status" aria-live="polite">
+            <span className="watch-buffering__spinner" aria-hidden />
+            <span>Menyiapkan buffer...</span>
+          </div>
+        )}
         {videoUrl? (
           useVideoJs? (
             <Player.Provider key={videoUrl}>
@@ -469,6 +518,7 @@ const Watch = () => {
                   src={videoUrl}
                   playsInline
                   autoPlay
+                  preload="auto"
                 />
               </VideoSkin>
             </Player.Provider>
