@@ -11,6 +11,8 @@ import {
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { resizeImageToDataUrl } from '../utils/image';
+import { resolveRole, isAdminRole, isPremiumRole, ROLE_USER } from '../utils/roles';
+import { setViewerAccess } from '../utils/accessTier';
 
 const AuthContext = createContext(null);
 
@@ -70,6 +72,7 @@ export const AuthProvider = ({ children }) => {
         displayName: u.displayName || extra.displayName || 'Pengguna',
         photoURL: u.photoURL || '',
         email: u.email || '',
+        role: ROLE_USER,
         level: 1,
         exp: 0,
         createdAt: serverTimestamp(),
@@ -178,10 +181,22 @@ export const AuthProvider = ({ children }) => {
     return updates;
   }, []);
 
+  const role = resolveRole(profile, user?.email);
+  const isAdmin = isAdminRole(profile, user?.email);
+  const isPremium = isPremiumRole(profile, user?.email);
+
+  // Sinkronkan tier penonton ke module state yang dipakai util anime custom,
+  // supaya fetcher di luar React (Home/Ongoing/Completed/Search) langsung tahu
+  // apakah konten premium boleh ikut ditampilkan.
+  setViewerAccess({ role, canPremium: isPremium, isAdmin });
+
   const value = useMemo(() => ({
     user,
     profile,
     loading,
+    role,
+    isAdmin,
+    isPremium,
     isLoggedIn: !!user,
     loginWithGoogle,
     registerWithPassword,
@@ -191,7 +206,7 @@ export const AuthProvider = ({ children }) => {
     updateUserProfile,
     updateStatsPrivacy,
   }), [
-    user, profile, loading, loginWithGoogle, registerWithPassword, loginWithPassword,
+    user, profile, loading, role, isAdmin, isPremium, loginWithGoogle, registerWithPassword, loginWithPassword,
     resetPassword, logout, updateUserProfile, updateStatsPrivacy,
   ]);
 
