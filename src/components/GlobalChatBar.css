@@ -1,0 +1,226 @@
+/* ── Global Chat ticker bar (Home) ──────────────────────────── */
+.global-chat-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 52px;
+  margin: 8px 0 24px;
+  padding: 0 4px 0 16px;
+  background: #0A0A0A;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--color-text, #fff);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.global-chat-bar:hover {
+  border-color: rgba(29, 78, 216, 0.5);
+  box-shadow: 0 0 0 1px rgba(29, 78, 216, 0.15);
+}
+
+/* Left label: icon + "GLOBAL CHAT" + live dot */
+.global-chat-bar__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-right: 16px;
+}
+
+.global-chat-bar__label-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary, #1D4ED8);
+}
+
+.global-chat-bar__label-text {
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.global-chat-bar__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22C55E;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+  animation: global-chat-bar-live-pulse 1.8s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes global-chat-bar-live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
+  70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.global-chat-bar__divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 12px 0;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+/* Scrolling ticker */
+.global-chat-bar__track-wrap {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding-left: 18px;
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 12px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 12px), transparent);
+}
+
+.global-chat-bar__empty {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #8899aa);
+  white-space: nowrap;
+}
+
+.global-chat-bar__track {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  padding-right: 10px;
+  animation: global-chat-bar-scroll 26s linear infinite;
+  will-change: transform;
+}
+
+.global-chat-bar:hover .global-chat-bar__track {
+  animation-play-state: paused;
+}
+
+@keyframes global-chat-bar-scroll {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0%); }
+}
+
+/* Setiap pesan dibungkus jadi satu "chip" dengan border+background sendiri,
+   supaya batas antar pesan jelas dan tidak terlihat menyatu/berantakan. */
+.global-chat-bar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 6px 18px 6px 6px;
+  box-sizing: border-box;
+  /* Kunci lebar chip supaya SELALU sama, tidak melar ikut panjang teks —
+     ini yang membuat avatar/nama/badge chip berikutnya tidak pernah
+     bertabrakan dengan isi chip sebelumnya. Dilebarkan supaya nama tidak
+     terlalu cepat terpotong ellipsis. */
+  width: 280px;
+  flex-shrink: 0;
+}
+
+.global-chat-bar__avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.global-chat-bar__avatar--owner {
+  border-color: #F5A524;
+}
+
+/* Kolom kanan avatar: baris 1 = nama+badge, baris 2 = isi pesan.
+   min-width:0 WAJIB di sini — tanpa ini, flex item menolak menyusut di
+   bawah lebar kontennya sendiri sehingga ellipsis tidak pernah aktif dan
+   teks/badge malah bocor menimpa chip di sebelahnya. */
+.global-chat-bar__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1.25;
+  min-width: 0;
+  flex: 1;
+}
+
+.global-chat-bar__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.global-chat-bar__name {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.global-chat-bar__text {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #b8c2cc);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Badge "Pemilik" — ikon mahkota + teks digabung jadi satu pill ringkas,
+   flex-shrink:0 supaya ukurannya konstan dan tidak pernah gepeng, dengan
+   background/border eksplisit (bukan hanya gradient) supaya tetap terlihat
+   sebagai pill walau ada style lain yang bentrok. */
+.global-chat-bar__owner-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #8A5A00;
+  background-color: #F5A524;
+  background-image: linear-gradient(135deg, #FFD86B, #F5A524);
+  border: 1px solid #8A5A00;
+  border-radius: 999px;
+  padding: 2px 8px 2px 6px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .global-chat-bar {
+    height: 46px;
+    padding: 0 4px 0 12px;
+  }
+  .global-chat-bar__label-text {
+    font-size: 0.72rem;
+  }
+  .global-chat-bar__label { padding-right: 10px; gap: 6px; }
+  .global-chat-bar__track-wrap { padding-left: 12px; }
+  .global-chat-bar__item { padding: 5px 14px 5px 5px; gap: 8px; width: 224px; }
+  .global-chat-bar__avatar { width: 26px; height: 26px; }
+  .global-chat-bar__name { font-size: 0.68rem; }
+  .global-chat-bar__text { font-size: 0.68rem; }
+  .global-chat-bar__owner-tag { font-size: 0.52rem; padding: 1px 6px 1px 4px; }
+  }

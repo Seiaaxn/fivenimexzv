@@ -1,0 +1,354 @@
+/* ============================================================
+   HOME NEOBRUTALISM BIRU — SeivyNime
+   Hard border hitam, shadow offset solid, biru tegas,
+   tipografi ultra-bold, sudut tegas (radius 0).
+   ============================================================ */
+
+/* ── Token Neobrutalism Biru ─────────────────────────────── */
+:root {
+  --nb-black: #0A0A0A;
+  --nb-white: #EFF6FF;
+  --nb-blue: #1D4ED8;
+  --nb-blue-bright: #3B82F6;
+  --nb-blue-light: #60A5FA;
+  --nb-yellow: #FACC15;
+  --nb-cyan: #0EA5E9;
+  --nb-red: #EF4444;
+  --nb-green: #22C55E;
+  --nb-border: 3px solid var(--nb-black);
+  --nb-border-thick: 4px solid var(--nb-black);
+  --nb-shadow: 5px 5px 0 var(--nb-black);
+  --nb-shadow-lg: 8px 8px 0 var(--nb-black);
+  --nb-shadow-hover: 2px 2px 0 var(--nb-black);
+  --nb-radius: 0px;
+
+  /* Alias lama agar neobrutalism-redesign.css tetap jalan */
+  --nb-purple: var(--nb-blue);
+  --nb-purple-bright: var(--nb-blue-bright);
+}
+
+/* ── Reset border-radius untuk elemen home ──────────────────── */
+.home-container .home-hero,
+.home-container .home-category-section,
+.home-container .section-header,
+.home-container .home-category-header,
+.home-container .schedule-summary-grid .schedule-day-pill,
+.home-container .donor-list,
+.home-container .section {
+  border-radius: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HERO SECTION
+═══════════════════════════════════════════════════════════ */
+.home-container .home-hero {
+  background: var(--nb-blue) !important;
+  border: var(--nb-border-thick) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--nb-shadow-lg) !important;
+  padding: 48px 32px !important;
+  margin-bottom: 40px !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+/* Accent bar atas — strip kuning tebal */
+.home-container .home-hero::before {
+  content: '' !important;
+  position: absolute !important;
+  top: -4px !important;
+  left: -4px !important;
+  right: -4px !important;
+  height: 8px !important;
+  background: var(--nb-yellow) !important;
+  z-index: 2 !important;
+}
+
+/* Dekorasi label pojok kanan atas */
+.home-container .home-hero::after {
+  content: 'FREE · NO LOGIN' !important;
+  position: absolute !important;
+  top: 16px !important;
+  right: -4px !important;
+  background: var(--nb-yellow) !important;
+  color: var(--nb-black) !important;
+  font-weight: 900 !important;
+  font-size: 0.65rem !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  padding: 4px 12px !important;
+  border: 2px solid var(--nb-black) !important;
+  z-index: 3 !important;
+  border-radius: 0 !important;
+}
+
+.home-container .home-hero-eyebrow {
+  display: inline-block !important;
+  background: var(--nb-yellow) !important;
+  color: var(--nb-black) !important;
+  font-size: 0.65rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  padding: 5px 14px !important;
+  border: 2px solid var(--nb-black) !important;
+  border-radius: 0 !important;
+  margin-bottom: 20px !important;
+  box-shadow: 3px 3px 0 var(--nb-black) !important;
+}
+
+.home-container .main-title {
+  font-size: clamp(2.8rem, 8vw, 5.5rem) !important;
+  font-weight: 900 !important;
+  color: #fff !important;
+  letter-spacing: -0.03em !important;
+  line-height: 1 !important;
+  text-shadow: 4px 4px 0 rgba(0,0,0,0.3) !important;
+}
+
+.home-container .subtitle {
+  color: rgba(255,255,255,0.85) !important;
+  font-size: 1.05rem !important;
+  font-weight: 500 !important;
+  margin-top: 14px !important;
+  max-width: 540px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* Hero CTA */
+.home-container .home-hero-actions .btn {
+  border-radius: 0 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.06em !important;
+}
+.home-container .home-hero-actions .btn-primary {
+  background: var(--nb-yellow) !important;
+  color: var(--nb-black) !important;
+  border: 3px solid var(--nb-black) !important;
+  box-shadow: var(--nb-shadow) !important;
+}
+.home-container .home-hero-actions .btn-primary:hover {
+  transform: translate(3px, 3px) !important;
+  box-shadow: var(--nb-shadow-hover) !important;
+}
+.home-container .home-hero-actions .btn-secondary {
+  background: transparent !important;
+  color: #fff !important;
+  border: 3px solid #fff !important;
+  box-shadow: 5px 5px 0 rgba(0,0,0,0.25) !important;
+}
+.home-container .home-hero-actions .btn-secondary:hover {
+  background: rgba(255,255,255,0.15) !important;
+  transform: translate(3px, 3px) !important;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.25) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECTION HEADER
+═══════════════════════════════════════════════════════════ */
+.home-container .section-header {
+  background: var(--nb-blue) !important;
+  border: 3px solid var(--nb-black) !important;
+  box-shadow: var(--nb-shadow) !important;
+  border-radius: 0 !important;
+  padding: 12px 16px !important;
+}
+.home-container .section-header .section-title {
+  color: #fff !important;
+}
+.home-container .section-header .view-all {
+  background: var(--nb-yellow) !important;
+  color: var(--nb-black) !important;
+  border: 2px solid var(--nb-black) !important;
+  border-radius: 0 !important;
+  font-weight: 900 !important;
+  box-shadow: 2px 2px 0 var(--nb-black) !important;
+}
+.home-container .section-header .view-all:hover {
+  transform: translate(2px, 2px) !important;
+  box-shadow: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CARDS
+═══════════════════════════════════════════════════════════ */
+.home-container .card {
+  border: 3px solid var(--nb-black) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--nb-shadow) !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+.home-container .card:hover {
+  transform: translate(3px, 3px) !important;
+  box-shadow: var(--nb-shadow-hover) !important;
+  border-color: var(--nb-blue-bright) !important;
+}
+.home-container .card-image-wrapper {
+  border-bottom: 3px solid var(--nb-black) !important;
+  border-radius: 0 !important;
+}
+.home-container .play-icon {
+  border-radius: 0 !important;
+  background: var(--nb-blue) !important;
+  border: 3px solid var(--nb-black) !important;
+  box-shadow: var(--nb-shadow-hover) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCHEDULE SUMMARY
+═══════════════════════════════════════════════════════════ */
+.home-container .schedule-summary {
+  border: 3px solid var(--nb-black) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--nb-shadow) !important;
+}
+.home-container .schedule-summary th {
+  background: var(--nb-blue) !important;
+  color: #fff !important;
+  border-bottom: 3px solid var(--nb-black) !important;
+}
+.home-container .schedule-summary td {
+  border-bottom: 2px solid var(--nb-black) !important;
+}
+.home-container .schedule-summary tr:hover td {
+  background: rgba(29, 78, 216, 0.1) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CAROUSEL
+═══════════════════════════════════════════════════════════ */
+.home-rail-card .card {
+  border: 3px solid var(--nb-black) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--nb-shadow) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BADGES
+═══════════════════════════════════════════════════════════ */
+.home-container .anime-card-badge {
+  border-radius: 0 !important;
+  border: 2px solid var(--nb-black) !important;
+  box-shadow: 2px 2px 0 var(--nb-black) !important;
+}
+.home-container .anime-card-badge--ongoing {
+  background: var(--nb-green) !important;
+  color: var(--nb-black) !important;
+}
+.home-container .anime-card-badge--completed {
+  background: var(--nb-cyan) !important;
+  color: var(--nb-black) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGINATION & LOADING
+═══════════════════════════════════════════════════════════ */
+.home-container .pagination .btn {
+  border-radius: 0 !important;
+  border: 3px solid var(--nb-black) !important;
+  box-shadow: var(--nb-shadow) !important;
+}
+.home-container .spinner {
+  border-top-color: var(--nb-blue) !important;
+  border-radius: 50% !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FILTER TABS
+═══════════════════════════════════════════════════════════ */
+.home-container .filter-tab {
+  border-radius: 0 !important;
+  border: 3px solid var(--nb-black) !important;
+  box-shadow: var(--nb-shadow-hover) !important;
+  font-weight: 700 !important;
+}
+.home-container .filter-tab.active {
+  background: var(--nb-blue) !important;
+  color: #fff !important;
+  border-color: var(--nb-black) !important;
+  box-shadow: 2px 2px 0 var(--nb-black) !important;
+  transform: translate(2px, 2px) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE HEADER (halaman list, genres, dll)
+═══════════════════════════════════════════════════════════ */
+.page-header {
+  border: 3px solid var(--nb-black) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--nb-shadow-lg) !important;
+}
+.page-header::before {
+  background: var(--nb-blue) !important;
+  height: 6px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   QUICK NAV (konsep: CARI · ANIME · DONGHUA · KOMIK)
+═══════════════════════════════════════════════════════════ */
+.home-container .home-quicknav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 20px 0 18px;
+}
+
+.home-container .home-quicknav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--nb-white);
+  color: var(--nb-black);
+  border: var(--nb-border);
+  box-shadow: var(--nb-shadow);
+  border-radius: 0;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 900;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  line-height: 1;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.home-container .home-quicknav-item:hover,
+.home-container .home-quicknav-item:focus-visible {
+  transform: translate(3px, 3px);
+  box-shadow: var(--nb-shadow-hover);
+  background: var(--nb-yellow);
+}
+
+.home-container .home-quicknav-item--search {
+  background: var(--nb-yellow);
+}
+.home-container .home-quicknav-item--search:hover {
+  background: var(--nb-white);
+}
+.home-container .home-quicknav-item svg { display: block; }
+
+/* Rail "Popular" di paling atas */
+.home-container .home-popular .section-title {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  -webkit-text-stroke: 0;
+}
+
+.home-container .home-popular {
+  border-top: var(--nb-border-thick);
+  padding-top: 18px;
+}
+
+@media (max-width: 640px) {
+  .home-container .home-quicknav { gap: 8px; }
+  .home-container .home-quicknav-item {
+    padding: 9px 14px;
+    font-size: 0.82rem;
+    box-shadow: 4px 4px 0 var(--nb-black);
+  }
+}

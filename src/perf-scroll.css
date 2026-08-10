@@ -1,0 +1,84 @@
+/* ============================================================
+   perf-scroll.css — optimasi performa scroll (anti-lag)
+   Diimport paling akhir supaya menang spesifisitas/urutan.
+   ============================================================ */
+
+/* 1. Lewati render/paint untuk section yang belum kelihatan.
+      Ini penghilang lag terbesar di halaman panjang. */
+.home-container .home-category-section,
+.home-container .section,
+.home-container .home-rail {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}
+
+/* 2. Isolasi layout/paint tiap kartu -> browser tidak menghitung ulang
+      seluruh halaman saat satu kartu berubah. */
+.home-rail-card,
+.anime-card {
+  contain: layout paint style;
+}
+
+/* 3. Rail horizontal: scroll ringan, tanpa rantai scroll ke body. */
+.home-rail-scroll {
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: none;
+}
+
+/* 4. Gambar poster: ukuran tetap supaya tidak reflow saat lazy-load. */
+.anime-card .poster,
+.home-rail-card img.poster {
+  aspect-ratio: 200 / 280;
+  object-fit: cover;
+  background: var(--color-surface-hover, #1a1a26);
+  content-visibility: auto;
+}
+
+/* 5. Efek berat (blur/backdrop) dimatikan di dalam rail —
+      backdrop-filter memaksa repaint tiap frame saat scroll. */
+.home-rail-scroll *,
+.home-rail-card * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 6. Jangan pernah biarkan will-change menempel permanen (boros GPU). */
+.home-container * {
+  will-change: auto;
+}
+
+/* 7. Transisi hanya untuk properti murah, dan hanya di perangkat berpointer. */
+@media (hover: hover) and (pointer: fine) {
+  .anime-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .anime-card:hover {
+    transform: translate3d(0, -4px, 0);
+  }
+}
+
+/* 8. Perangkat sentuh: matikan hover transform + animasi dekoratif. */
+@media (hover: none) {
+  .anime-card,
+  .anime-card:hover,
+  .anime-card:active {
+    transform: none !important;
+    transition: none !important;
+  }
+  .home-container .card-overlay {
+    display: none;
+  }
+}
+
+/* 9. Hormati preferensi reduce-motion. */
+@media (prefers-reduced-motion: reduce) {
+  .home-container *,
+  .home-container *::before,
+  .home-container *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

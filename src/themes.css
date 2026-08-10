@@ -1,0 +1,105 @@
+/* ========== THEME VARIANTS ========== */
+/* Default adalah dark blue neobrutalism — didefinisikan di index.css */
+
+/* Cyberpunk theme */
+[data-theme="cyberpunk"] {
+  --color-primary: #1D4ED8;
+  --color-primary-light: #3B82F6;
+  --color-secondary: #00FFFF;
+  --color-accent: #FACC15;
+  --color-bg: #000D1A;
+  --color-bg-alt: #001428;
+  --color-surface: #001F3F;
+  --color-surface-hover: #002855;
+  --color-surface-elevated: #00243A;
+  --color-border: #003366;
+  --color-glow: rgba(29, 78, 216, 0.3);
+  --color-glow-cyan: rgba(0, 255, 255, 0.15);
+}
+
+/* Ocean theme */
+[data-theme="ocean"] {
+  --color-primary: #1D4ED8;
+  --color-primary-light: #3B82F6;
+  --color-secondary: #0EA5E9;
+  --color-accent: #FACC15;
+  --color-bg: #050F1F;
+  --color-bg-alt: #0A1929;
+  --color-surface: #0D2137;
+  --color-surface-hover: #132B47;
+  --color-surface-elevated: #102440;
+  --color-border: #1B3A5C;
+  --color-glow: rgba(29, 78, 216, 0.2);
+  --color-glow-cyan: rgba(14, 165, 233, 0.15);
+}
+
+/* Sunset theme */
+[data-theme="sunset"] {
+  --color-primary: #1D4ED8;
+  --color-primary-light: #3B82F6;
+  --color-secondary: #60A5FA;
+  --color-accent: #FACC15;
+  --color-bg: #080C14;
+  --color-bg-alt: #0D1526;
+  --color-surface: #111827;
+  --color-surface-hover: #1A2540;
+  --color-surface-elevated: #162035;
+  --color-border: #1E3A5F;
+  --color-glow: rgba(29, 78, 216, 0.2);
+  --color-glow-cyan: rgba(96, 165, 250, 0.12);
+}
+
+/* ========== LIGHT MODE ========== */
+[data-theme="light"] {
+  --color-primary: #1D4ED8;
+  --color-primary-light: #3B82F6;
+  --color-secondary: #0EA5E9;
+  --color-accent: #FACC15;
+
+  --color-bg: #F4F7FF;
+  --color-bg-alt: #E8EFFF;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #EEF3FF;
+  --color-surface-elevated: #FFFFFF;
+
+  --color-text: #0A0A0A;
+  --color-text-muted: #33507F;
+  --color-text-dim: #6B7FA6;
+  --color-border: #0A0A0A;
+  --color-border-strong: #0A0A0A;
+  --color-glow: rgba(29, 78, 216, 0.18);
+  --color-glow-cyan: rgba(14, 165, 233, 0.12);
+
+  --nb-white: #FFFFFF;
+  color-scheme: light;
+}
+
+[data-theme="light"] body,
+[data-theme="light"] .app {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+[data-theme="light"] .home-container .home-hero,
+[data-theme="light"] .dd-hero {
+  color: #FFFFFF;
+}
+
+[data-theme="light"] .card,
+[data-theme="light"] .section-neo,
+[data-theme="light"] .anime-card {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+[data-theme="light"] .anime-info h3,
+[data-theme="light"] .section-title,
+[data-theme="light"] .dd-section-title {
+  color: var(--color-text);
+}
+
+[data-theme="light"] .dd-synopsis__text,
+[data-theme="light"] .meta,
+[data-theme="light"] .subtitle {
+  color: var(--color-text-muted);
+}

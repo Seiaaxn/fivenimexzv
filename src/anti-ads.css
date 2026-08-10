@@ -1,0 +1,15 @@
+/* ========== ANTI-ADS / IFRAME CLEANUP ========== */
+iframe[src*="ads"],
+iframe[src*="doubleclick"],
+iframe[src*="googlesyndication"],
+iframe[src*="adservice"],
+div[class*="ad-"],
+div[id*="ad-container"],
+div[class*="popup"],
+div[class*="overlay-ad"] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+}

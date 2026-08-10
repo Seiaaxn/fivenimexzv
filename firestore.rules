@@ -1,0 +1,149 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Profil pengguna: siapa saja bisa baca (untuk menampilkan nama/foto di
+    // komentar), tapi hanya pemilik akun yang boleh menulis miliknya sendiri.
+    // Foto profil disimpan langsung sebagai field `photoURL` (base64) di sini
+    // — tidak memakai Firebase Storage sama sekali.
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // Bookmark (Favorit & Watchlist): hanya pemilik yang boleh baca/tulis
+    // bookmark miliknya. `listType` membedakan Favorit vs Watchlist.
+    // `!exists(...)` di allow read menghindari "permission-denied" palsu saat
+    // mengecek status bookmark dari sebuah item yang belum pernah disimpan.
+    match /bookmarks/{bookmarkId} {
+      allow read: if request.auth != null
+                  && (!exists(/databases/$(database)/documents/bookmarks/$(bookmarkId))
+                      || resource.data.uid == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.uid
+                    && request.resource.data.listType in ['favorite', 'watchlist'];
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow update: if false;
+    }
+
+    // Komentar (+ balasan lewat field `parentId`): siapa saja bisa baca,
+    // menulis komentar/balasan atas nama sendiri, dan hanya menghapus
+    // komentar miliknya sendiri.
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.uid
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() > 0
+                    && request.resource.data.text.size() <= 1000;
+      allow update: if false;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+    }
+
+    // Riwayat tonton anime & donghua — hanya pemilik yang boleh baca/tulis.
+    // `!exists(...)` menghindari "permission-denied" saat mengecek progres
+    // sebuah episode yang belum pernah ditonton (dokumennya belum ada).
+    match /watchHistory/{historyId} {
+      allow read: if request.auth != null
+                  && (!exists(/databases/$(database)/documents/watchHistory/$(historyId))
+                      || resource.data.uid == request.auth.uid);
+      allow create, update: if request.auth != null
+                            && request.auth.uid == request.resource.data.uid;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+    }
+
+    // Riwayat baca komik — hanya pemilik yang boleh baca/tulis.
+    match /komikHistory/{historyId} {
+      allow read: if request.auth != null
+                  && (!exists(/databases/$(database)/documents/komikHistory/$(historyId))
+                      || resource.data.uid == request.auth.uid);
+      allow create, update: if request.auth != null
+                            && request.auth.uid == request.resource.data.uid;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+    }
+
+    // Log penanda pemberian EXP (1 dokumen per episode/chapter yang sudah
+    // pernah memberi EXP ke seorang user), dipakai supaya EXP tidak pernah
+    // diberikan dua kali untuk episode/chapter yang sama. Hanya pemilik yang
+    // boleh membaca/membuatnya; sekali dibuat, tidak pernah diubah/dihapus.
+    match /expLog/{logId} {
+      allow read: if request.auth != null
+                  && (!exists(/databases/$(database)/documents/expLog/$(logId))
+                      || resource.data.uid == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.uid;
+      allow update, delete: if false;
+    }
+
+    // Chat Global (halaman Home): siapa saja bisa baca, menulis pesan atas
+    // nama sendiri, dan hanya menghapus pesan miliknya sendiri.
+    match /globalChat/{messageId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.uid
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() > 0
+                    && request.resource.data.text.size() <= 300;
+      allow update: if false;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+    }
+
+    // Pesan langsung (DM) antar teman: hanya kedua partisipan yang boleh
+    // membaca/menulis dokumen percakapan dan pesan-pesan di dalamnya.
+    match /dmChats/{chatId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.participants;
+      allow create, update: if request.auth != null
+                            && request.auth.uid in request.resource.data.participants;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null
+                    && request.auth.uid in get(/databases/$(database)/documents/dmChats/$(chatId)).data.participants;
+        allow create: if request.auth != null
+                      && request.auth.uid == request.resource.data.uid
+                      && request.auth.uid in get(/databases/$(database)/documents/dmChats/$(chatId)).data.participants;
+        allow update, delete: if false;
+      }
+    }
+
+    // Follow (Twitter/TikTok style): siapa saja bisa baca daftar
+    // pengikut/mengikuti seseorang, tapi hanya pemilik akun (`followerUid`)
+    // yang boleh membuat/menghapus baris follow-nya sendiri.
+    match /follows/{followId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.followerUid;
+      allow update: if false;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.followerUid;
+    }
+
+    // Anime custom hasil upload admin (/admin, khusus akun pemilik
+    // FiveNime): siapa saja boleh baca supaya muncul di beranda/pencarian,
+    // tapi hanya email admin yang boleh menulis.
+    match /customAnime/{animeId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null
+                    && request.auth.token.email != null
+                    && request.auth.token.email.lower() == 'seiiyvn5@gmail.com';
+    }
+
+    // Permintaan pertemanan: hanya pengirim/penerima yang boleh
+    // membaca/mengubahnya masing-masing sesuai aksinya.
+    match /friendRequests/{requestId} {
+      allow read: if request.auth != null
+                  && (!exists(/databases/$(database)/documents/friendRequests/$(requestId))
+                      || request.auth.uid == resource.data.fromUid
+                      || request.auth.uid == resource.data.toUid);
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.fromUid;
+      // Hanya penerima yang boleh menerima (mengubah status jadi accepted).
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.toUid
+                    && request.resource.data.status == 'accepted';
+      allow delete: if request.auth != null
+                    && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+    }
+  }
+}

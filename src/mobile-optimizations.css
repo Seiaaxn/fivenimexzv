@@ -1,0 +1,70 @@
+/* ========== MOBILE OPTIMIZATIONS ========== */
+
+/* Touch-friendly tap targets */
+@media (pointer: coarse) {
+  .btn,
+  .filter-tab,
+  .nav-link,
+  .dropdown-item,
+  .genre-card,
+  .az-letter,
+  .schedule-tab,
+  .episode-btn,
+  .server-btn,
+  .quality-tab {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html { scroll-behavior: auto; }
+}
+
+/* Safe area for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .footer {
+    padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom));
+  }
+  .header {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Landscape phone */
+@media (max-height: 500px) and (orientation: landscape) {
+  .video-player-wrapper {
+    max-height: 85vh;
+  }
+  .home-hero {
+    padding: var(--space-4) var(--space-3);
+  }
+}
+
+/* High DPI screens */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  body::before {
+    background-size: 24px 24px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .header,
+  .footer,
+  .floating-shapes,
+  .theme-selector,
+  body::before {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+}
