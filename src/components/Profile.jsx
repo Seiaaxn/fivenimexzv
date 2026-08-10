@@ -15,14 +15,19 @@ import PremiumBadge from './PremiumBadge';
 import LevelBadge from './LevelBadge';
 import AuthModal from './AuthModal';
 import './PublicProfile.css';
+import AdminPanel from './AdminPanel';
 import './Profile.css';
 
-const TABS = [
+const BASE_TABS = [
   { id: 'ringkasan', label: 'Ringkasan' },
   { id: 'riwayat', label: 'Riwayat' },
   { id: 'favorit', label: 'Favorit' },
   { id: 'teman', label: 'Teman' },
 ];
+
+// Tab "Admin Panel" hanya muncul untuk akun ber-role admin
+// (default: seiiyvn5@gmail.com).
+const ADMIN_TAB = { id: 'admin', label: 'Admin Panel' };
 
 const bookmarkHref = (b) => {
   if (b.type === 'donghua') return `/donghua/${b.slug}`;
@@ -155,7 +160,7 @@ const StatCard = ({ value, label, icon }) => (
 );
 
 const Profile = () => {
-  const { user, profile, loading, updateUserProfile, updateStatsPrivacy, logout } = useAuth();
+  const { user, profile, isAdmin, isPremium, loading, updateUserProfile, updateStatsPrivacy, logout } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
@@ -255,7 +260,8 @@ const Profile = () => {
   const displayName = profile?.displayName || user.displayName || 'Pengguna';
   const photoURL = photoPreview || profile?.photoURL || user.photoURL || '/logo.png';
   const verified = isVerifiedEmail(user.email);
-  const premium = isPremiumEmail(user.email);
+  const premium = isPremium || isPremiumEmail(user.email);
+  const TABS = isAdmin ? [...BASE_TABS, ADMIN_TAB] : BASE_TABS;
 
   const startEditing = () => {
     setName(displayName);
@@ -541,9 +547,14 @@ const Profile = () => {
         </>
       )}
 
+      {activeTab === 'admin' && isAdmin && (
+        <section className="profile-section profile-admin">
+          <AdminPanel embedded />
+        </section>
+      )}
+
     </div>
   );
 };
 
 export default Profile;
-
