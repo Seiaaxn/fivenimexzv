@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from '@/lib/router-compat';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { isAdminEmail } from '../utils/customAnime';
 import AuthModal from './AuthModal';
 import './Header.css';
 
@@ -30,7 +29,7 @@ const MoonIcon = () => (
 const Header = () => {
   const location = useLocation();
   const { theme, setTheme } = useTheme();
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const isLight = theme === 'light';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -71,7 +70,7 @@ const Header = () => {
     ]},
     { to: '/schedule', label: 'Schedule' },
     { to: '/history', label: 'History' },
-    ...(isAdminEmail(user?.email) ? [{ to: '/admin', label: 'Admin' }] : []),
+    ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
   ];
 
   return (
