@@ -1,14 +1,15 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from '@/lib/router-compat';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  isAdminEmail,
   addCustomAnime,
   updateCustomAnime,
   deleteCustomAnime,
-  listCustomAnime,
+  listAllCustomAnime,
   uploadEpisodeVideo,
 } from '../utils/customAnime';
+import { TIER_FREE, TIER_PREMIUM } from '../utils/accessTier';
+import AdminUsers from './AdminUsers';
 import { resizeImageToDataUrl } from '../utils/image';
 import './AdminPanel.css';
 
@@ -18,6 +19,7 @@ const emptyForm = () => ({
   title: '',
   description: '',
   status: 'ongoing',
+  accessTier: TIER_FREE,
   type: 'TV',
   aired: '',
   duration: '',
@@ -30,8 +32,9 @@ const emptyForm = () => ({
   episodes: [emptyEpisode()],
 });
 
-const AdminPanel = () => {
-  const { user, loading: authLoading } = useAuth();
+const AdminPanel = ({ embedded = false }) => {
+  const { user, isAdmin, loading: authLoading } = useAuth();
+  const [tab, setTab] = useState('anime');
   const [items, setItems] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState(null);
@@ -43,14 +46,15 @@ const AdminPanel = () => {
   const [successMsg, setSuccessMsg] = useState('');
   // Per baris episode: { mode: 'url' | 'file', progress: 0-100, busy, error }
   const [episodeUpload, setEpisodeUpload] = useState({});
-
-  const isAdmin = isAdminEmail(user?.email);
+  // Progress upload di-throttle supaya React tidak re-render puluhan kali per
+  // detik (penyebab utama UI "nge-lag"/tersendat saat upload video besar).
+  const progressTickRef = useRef({});
 
   const loadList = useCallback(async () => {
     setListLoading(true);
     setListError(null);
     try {
-      const data = await listCustomAnime();
+      const data = await listAllCustomAnime();
       setItems(data);
     } catch (err) {
       setListError(err?.message ?? 'Gagal memuat daftar anime custom.');
@@ -96,6 +100,7 @@ const AdminPanel = () => {
       title: anime.title || '',
       description: anime.description || '',
       status: anime.status === 'completed' ? 'completed' : 'ongoing',
+      accessTier: anime.accessTier === TIER_PREMIUM ? TIER_PREMIUM : TIER_FREE,
       type: anime.type || 'TV',
       aired: anime.aired || '',
       duration: anime.duration || '',
@@ -168,6 +173,11 @@ const AdminPanel = () => {
     setEpisodeUpload((u) => ({ ...u, [idx]: { ...u[idx], mode: 'file', busy: true, progress: 0, error: null } }));
 
     const { promise } = uploadEpisodeVideo(file, editingId, (percent) => {
+      const now = Date.now();
+      const last = progressTickRef.current[idx] || 0;
+      // Update maksimal ~4x per detik (atau saat sudah 100%).
+      if (percent < 100 && now - last < 250) return;
+      progressTickRef.current[idx] = now;
       setEpisodeUpload((u) => ({ ...u, [idx]: { ...u[idx], progress: percent } }));
     });
 
@@ -213,6 +223,7 @@ const AdminPanel = () => {
       poster,
       description: form.description.trim(),
       status: form.status,
+      accessTier: form.accessTier,
       type: form.type,
       aired: form.aired.trim(),
       duration: form.duration.trim(),
@@ -252,12 +263,23 @@ const AdminPanel = () => {
   };
 
   return (
-    <div className="main-container admin-panel">
+    <div className={embedded ? 'admin-panel admin-panel--embedded' : 'main-container admin-panel'}>
+      {!embedded && (
       <header className="page-header section section-neo">
         <h1 className="main-title text-gradient">Admin — Upload Anime</h1>
-        <p className="subtitle">Tambah anime custom yang tersimpan langsung di Firebase, tampil di Sedang Tayang / Baru Selesai / Pencarian.</p>
+        <p className="subtitle">Kelola anime custom & pengguna. Tambah anime custom yang tersimpan langsung di Firebase, tampil di Sedang Tayang / Baru Selesai / Pencarian.</p>
       </header>
+      )}
 
+      <nav className="admin-tabs" aria-label="Bagian admin">
+        <button type="button" className={`admin-tab ${tab === 'anime' ? 'admin-tab--active' : ''}`} onClick={() => setTab('anime')}>Anime</button>
+        <button type="button" className={`admin-tab ${tab === 'users' ? 'admin-tab--active' : ''}`} onClick={() => setTab('users')}>Pengguna & Role</button>
+      </nav>
+
+      {tab === 'users' && <AdminUsers />}
+
+      {tab === 'anime' && (
+      <>
       <section className="section section-neo admin-form-section">
         <h2 className="dd-section-title">{editingId ? 'Edit Anime' : 'Upload Anime Baru'}</h2>
 
@@ -306,6 +328,31 @@ const AdminPanel = () => {
                 <option value="Special">Special</option>
               </select>
             </div>
+          </div>
+
+          <div className="admin-form__row">
+            <span className="admin-form__label">Akses Tayang</span>
+            <div className="admin-poster-toggle">
+              <button
+                type="button"
+                className={`admin-toggle-btn ${form.accessTier === TIER_FREE ? 'active' : ''}`}
+                onClick={() => setForm((f) => ({ ...f, accessTier: TIER_FREE }))}
+              >
+                Gratis (semua user)
+              </button>
+              <button
+                type="button"
+                className={`admin-toggle-btn ${form.accessTier === TIER_PREMIUM ? 'active' : ''}`}
+                onClick={() => setForm((f) => ({ ...f, accessTier: TIER_PREMIUM }))}
+              >
+                Premium
+              </button>
+            </div>
+            <p className="admin-hint">
+              {form.accessTier === TIER_PREMIUM
+                ? 'Anime ini hanya tampil untuk user dengan role Premium/Admin. User biasa tidak akan melihatnya sama sekali.'
+                : 'Anime ini tampil untuk semua pengunjung.'}
+            </p>
           </div>
 
           <div className="admin-form__row admin-form__row--split">
@@ -540,6 +587,10 @@ const AdminPanel = () => {
                   <h3>{anime.title}</h3>
                   <p className="admin-hint">
                     {anime.status === 'completed' ? 'Tamat' : 'Sedang Tayang'} · {anime.type} · {anime.episodeList.length} episode
+                    {' · '}
+                    <span className={`admin-tier-badge admin-tier-badge--${anime.accessTier}`}>
+                      {anime.accessTier === TIER_PREMIUM ? 'PREMIUM' : 'GRATIS'}
+                    </span>
                   </p>
                   <div className="admin-list__actions">
                     <Link to={`/anime/custom/${anime.animeId}`} className="btn btn-secondary btn-small">Lihat</Link>
@@ -552,6 +603,8 @@ const AdminPanel = () => {
           </div>
         )}
       </section>
+      </>
+      )}
     </div>
   );
 };
