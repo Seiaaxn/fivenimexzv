@@ -158,3 +158,125 @@
   .admin-episode-row { grid-template-columns: 1fr; }
   .admin-episode-row__top { grid-template-columns: 60px 1fr auto; }
 }
+
+
+/* ─── Tab admin (Anime / Pengguna) ─── */
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.admin-tab {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 2px solid var(--color-border, rgba(0, 0, 0, 0.2));
+  background: var(--color-surface, #fff);
+  color: inherit;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.admin-tab--active {
+  background: var(--color-primary, #6c5ce7);
+  color: #fff;
+  border-color: var(--color-primary, #6c5ce7);
+}
+
+.admin-panel--embedded { padding: 0; }
+
+/* ─── Badge tier konten ─── */
+.admin-tier-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.admin-tier-badge--premium {
+  background: linear-gradient(90deg, #f7b733, #fc4a1a);
+  color: #fff;
+}
+
+/* ─── Daftar pengguna ─── */
+.admin-user-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.admin-user {
+  border: 2px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--color-surface, #fff);
+}
+
+.admin-user__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-user__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.admin-user__avatar--fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary, #6c5ce7);
+  color: #fff;
+  font-weight: 900;
+}
+
+.admin-user__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-user__meta strong { word-break: break-word; }
+
+.admin-role-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  background: rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.admin-role-badge--premium { background: linear-gradient(90deg, #f7b733, #fc4a1a); color: #fff; }
+.admin-role-badge--admin { background: #111; color: #fff; }
+
+.admin-user__controls {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.admin-user__progress {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.admin-user__field {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.admin-user__field .admin-form__input { flex: 1; min-width: 0; }
