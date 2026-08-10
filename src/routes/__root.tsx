@@ -115,6 +115,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      // Video & poster anime custom disajikan dari Firebase Storage —
+      // preconnect memangkas waktu handshake sebelum buffer video mulai.
+      { rel: "preconnect", href: "https://firebasestorage.googleapis.com", crossOrigin: "anonymous" },
+      { rel: "dns-prefetch", href: "https://firebasestorage.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
@@ -172,4 +176,4 @@ function RootComponent() {
       </ThemeProvider>
     </QueryClientProvider>
   );
-}
+        }
