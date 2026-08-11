@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo } 
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   updateProfile as updateAuthProfile,
   createUserWithEmailAndPassword,
@@ -47,6 +49,20 @@ export const AuthProvider = ({ children }) => {
     });
     return () => unsub();
   }, []);
+
+  // Tangkap hasil redirect Google login (dipakai kalau popup diblokir browser)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          await ensureUserDoc(result.user);
+        }
+      })
+      .catch(() => {
+        // Abaikan error redirect (mis. user membatalkan di halaman Google)
+      });
+  }, [ensureUserDoc]);
 
   // Live-sync the Firestore profile document for the current user.
   // This is also where the (base64) profile photo lives — no Firebase
@@ -100,10 +116,31 @@ export const AuthProvider = ({ children }) => {
 
   const loginWithGoogle = useCallback(async () => {
     try {
+      // Coba popup dulu — lebih nyaman karena tidak perlu redirect halaman
       const res = await signInWithPopup(auth, googleProvider);
       await ensureUserDoc(res.user);
       return res.user;
     } catch (err) {
+      const code = err?.code || '';
+      // Kode-kode ini berarti popup diblokir atau tidak didukung browser/WebView:
+      // popup-closed-by-user    → user menutup popup (bisa jadi popup blocker)
+      // popup-blocked           → browser aktif memblokir popup
+      // cancelled-popup-request → ada request popup lain yang bentrok
+      // operation-not-supported → WebView / browser mobile tidak support popup
+      const shouldRedirect = [
+        'auth/popup-closed-by-user',
+        'auth/popup-blocked',
+        'auth/cancelled-popup-request',
+        'auth/operation-not-supported-in-this-environment',
+      ].includes(code);
+
+      if (shouldRedirect) {
+        // Fallback: redirect ke halaman Google, lalu kembali ke app ini.
+        // Hasilnya ditangkap oleh getRedirectResult di useEffect di atas.
+        await signInWithRedirect(auth, googleProvider);
+        return; // halaman akan redirect, tidak ada return value
+      }
+
       throw new Error(mapAuthError(err));
     }
   }, [ensureUserDoc]);
