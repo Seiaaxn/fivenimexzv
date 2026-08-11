@@ -6,6 +6,7 @@ import {
   collection,
   doc,
   getDocs,
+  onSnapshot,
   query,
   orderBy,
   limit as fbLimit,
@@ -47,23 +48,51 @@ export const isPremiumRole = (profile, email) => {
   return role === ROLE_PREMIUM || role === ROLE_ADMIN;
 };
 
-/** Ambil daftar user untuk admin panel. */
-export const listUsers = async (max = 300) => {
+/** Helper: normalisasi satu dokumen user menjadi objek UI. */
+const normalizeUser = (d) => {
+  const data = d.data() || {};
+  return {
+    uid: d.id,
+    displayName: data.displayName || 'Pengguna',
+    email: data.email || '',
+    photoURL: data.photoURL || '',
+    role: resolveRole(data, data.email),
+    exp: data.exp || 0,
+    level: data.level || levelFromExp(data.exp || 0),
+    createdAt: data.createdAt || null,
+    lastLoginAt: data.lastLoginAt || null,
+    loginCount: data.loginCount || 0,
+  };
+};
+
+/** Ambil daftar user sekali (fallback / non-realtime). */
+export const listUsers = async (max = 500) => {
   const snap = await getDocs(
     query(collection(db, 'users'), orderBy('createdAt', 'desc'), fbLimit(max)),
   );
-  return snap.docs.map((d) => {
-    const data = d.data() || {};
-    return {
-      uid: d.id,
-      displayName: data.displayName || 'Pengguna',
-      email: data.email || '',
-      photoURL: data.photoURL || '',
-      role: resolveRole(data, data.email),
-      exp: data.exp || 0,
-      level: data.level || levelFromExp(data.exp || 0),
-    };
-  });
+  return snap.docs.map(normalizeUser);
+};
+
+/**
+ * Subscribe realtime ke daftar user (onSnapshot).
+ * Dipanggil dari AdminUsers supaya setiap user baru yang login/daftar
+ * langsung muncul tanpa perlu refresh manual.
+ *
+ * @param {function} callback  Dipanggil dengan array user setiap ada perubahan
+ * @param {number}   max       Batas dokumen (default 500)
+ * @returns {function}         Fungsi unsubscribe
+ */
+export const watchUsers = (callback, max = 500) => {
+  const q = query(
+    collection(db, 'users'),
+    orderBy('createdAt', 'desc'),
+    fbLimit(max),
+  );
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map(normalizeUser)),
+    () => callback([]),
+  );
 };
 
 /** Ubah role seorang user (hanya dipanggil dari admin panel). */
