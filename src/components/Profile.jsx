@@ -260,7 +260,8 @@ const Profile = () => {
   const displayName = profile?.displayName || user.displayName || 'Pengguna';
   const photoURL = photoPreview || profile?.photoURL || user.photoURL || '/logo.png';
   const verified = isVerifiedEmail(user.email);
-  const premium = isPremium || isPremiumEmail(user.email);
+  const premium = isPremium; // true untuk role premium & admin
+  const isOwner = isPremiumEmail(user.email); // hanya email pemilik situs
   const TABS = isAdmin ? [...BASE_TABS, ADMIN_TAB] : BASE_TABS;
 
   const startEditing = () => {
@@ -377,7 +378,8 @@ const Profile = () => {
                 </h1>
                 <p className="pp-handle">
                   {user.email}
-                  {premium && <span className="pp-owner-tag">Pemilik FiveNime</span>}
+                  {isOwner && <span className="pp-owner-tag">Pemilik FiveNime</span>}
+                  {premium && !isOwner && <span className="pp-owner-tag" style={{ background: 'linear-gradient(135deg,#FFD86B,#F5A524)', color: '#7a4400' }}>Premium</span>}
                 </p>
 
                 {/* Level row */}
