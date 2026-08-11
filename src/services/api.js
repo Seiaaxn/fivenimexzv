@@ -6,6 +6,24 @@ const devError = (...args) => { if (isDev) console.error(...args); };
 export const logInfo = (...args) => console.info(...args);
 export const logError = (...args) => console.error(...args);
 
+import {
+  NIMEGAMI_EP_SEP,
+  normalizeSankaList,
+  normalizeSankaGenres,
+  normalizeSankaDetail,
+  normalizeSankaEpisode,
+  normalizeNimegamiDetail,
+  normalizeNimegamiEpisode,
+  normalizeAlqHome,
+  normalizeAlqList,
+  normalizeAlqDetail,
+  normalizeStreamList,
+  normalizeStreamDetail,
+  normalizeStreamEpisode,
+} from './sankaProviders';
+
+export { NIMEGAMI_EP_SEP };
+
 const API_BASE_URL = 'https://www.sankavollerei.web.id/anime';
 
 // ═══════════════════════════════════════════════════════
@@ -686,29 +704,121 @@ const providers = {
   },
 
 
+  // ── Oploverz (sankavollerei) ──
   oploverz: {
-    getHome: () => fetchAnime('/oploverz/home', 'oploverz'),
+    getHome: (page = 1) =>
+      fetchAnime(`/oploverz/home?page=${page}`, 'oploverz').then((r) => normalizeSankaList(r, 'oploverz')),
     getSchedule: () => fetchAnime('/oploverz/schedule', 'oploverz'),
-    getOngoing: () => fetchAnime('/oploverz/ongoing', 'oploverz'),
-    getCompleted: () => fetchAnime('/oploverz/completed', 'oploverz'),
-    getList: () => fetchAnime('/oploverz/list', 'oploverz'),
-    search: (keyword) => fetchAnime(`/oploverz/search/${encodeURIComponent(keyword)}`, 'oploverz'),
-    getAnimeDetail: (slug) => fetchAnime(`/oploverz/anime/${slug}`, 'oploverz'),
-    getEpisodeDetail: (slug) => fetchAnime(`/oploverz/episode/${slug}`, 'oploverz'),
+    getOngoing: (page = 1) =>
+      fetchAnime(`/oploverz/ongoing?page=${page}`, 'oploverz').then((r) => normalizeSankaList(r, 'oploverz', 'Ongoing')),
+    getCompleted: (page = 1) =>
+      fetchAnime(`/oploverz/completed?page=${page}`, 'oploverz').then((r) => normalizeSankaList(r, 'oploverz', 'Completed')),
+    getList: ({ status = '', type = '', order = '', page = 1 } = {}) =>
+      fetchAnime(
+        `/oploverz/list?${new URLSearchParams({
+          ...(status ? { status } : {}),
+          ...(type ? { type } : {}),
+          ...(order ? { order } : {}),
+          page: String(page),
+        }).toString()}`,
+        'oploverz',
+      ).then((r) => normalizeSankaList(r, 'oploverz', status)),
+    search: (keyword, page = 1) =>
+      fetchAnime(`/oploverz/search/${encodeURIComponent(keyword)}?page=${page}`, 'oploverz')
+        .then((r) => normalizeSankaList(r, 'oploverz')),
+    getAnimeDetail: (slug) =>
+      fetchAnime(`/oploverz/anime/${slug}`, 'oploverz').then((r) => normalizeSankaDetail(r, slug, 'oploverz')),
+    getEpisodeDetail: (slug) =>
+      fetchAnime(`/oploverz/episode/${slug}`, 'oploverz', { priority: true })
+        .then((r) => normalizeSankaEpisode(r, 'oploverz')),
   },
-  
+
+  // ── Nimegami (sankavollerei) ──
+  // Nimegami tidak punya slug episode; episode dibentuk dari
+  // `streams_by_episode` → episodeId "<slug>$$Episode%201".
+  nimegami: {
+    getHome: (page = 1) =>
+      fetchAnime(`/nimegami/home?page=${page}`, 'nimegami').then((r) => normalizeSankaList(r, 'nimegami')),
+    search: (keyword, page = 1) =>
+      fetchAnime(`/nimegami/search/${encodeURIComponent(keyword)}?page=${page}`, 'nimegami')
+        .then((r) => normalizeSankaList(r, 'nimegami')),
+    getGenres: () => fetchAnime('/nimegami/genre/list', 'nimegami').then((r) => normalizeSankaGenres(r, 'nimegami')),
+    getGenreAnime: (slug, page = 1) =>
+      fetchAnime(`/nimegami/genre/${slug}?page=${page}`, 'nimegami').then((r) => normalizeSankaList(r, 'nimegami')),
+    getSeasons: () => fetchAnime('/nimegami/seasons/list', 'nimegami'),
+    getSeasonAnime: (slug, page = 1) =>
+      fetchAnime(`/nimegami/seasons/${slug}?page=${page}`, 'nimegami').then((r) => normalizeSankaList(r, 'nimegami')),
+    getTypes: () => fetchAnime('/nimegami/type/list', 'nimegami'),
+    getTypeAnime: (slug, page = 1) =>
+      fetchAnime(`/nimegami/type/${slug}?page=${page}`, 'nimegami').then((r) => normalizeSankaList(r, 'nimegami')),
+    getMovies: (page = 1) =>
+      fetchAnime(`/nimegami/type/movie?page=${page}`, 'nimegami').then((r) => normalizeSankaList(r, 'nimegami', 'Movie')),
+    getJDrama: (page = 1) =>
+      fetchAnime(`/nimegami/j-drama?page=${page}`, 'nimegami').then((r) => normalizeSankaList(r, 'nimegami')),
+    getLiveAction: (page = 1) =>
+      fetchAnime(`/nimegami/live-action?page=${page}`, 'nimegami').then((r) => normalizeSankaList(r, 'nimegami')),
+    getLiveActionDetail: (slug) =>
+      fetchAnime(`/nimegami/live-action/${slug}`, 'nimegami').then((r) => normalizeNimegamiDetail(r, slug)),
+    getDramaDetail: (slug) =>
+      fetchAnime(`/nimegami/drama/${slug}`, 'nimegami').then((r) => normalizeNimegamiDetail(r, slug)),
+    getAnimeDetail: (slug) =>
+      fetchAnime(`/nimegami/detail/${slug}`, 'nimegami').then((r) => normalizeNimegamiDetail(r, slug)),
+    // episodeId: "<animeSlug>$$<Episode label ter-encode>"
+    getEpisodeDetail: (episodeId) => {
+      const [slug, rawLabel] = String(episodeId).split(NIMEGAMI_EP_SEP);
+      const label = rawLabel ? decodeURIComponent(rawLabel) : '';
+      return fetchAnime(`/nimegami/detail/${slug}`, 'nimegami', { priority: true })
+        .then((r) => normalizeNimegamiEpisode(r, label));
+    },
+  },
+
+  // ── Alqanime (sankavollerei) ──
+  alqanime: {
+    getHome: (page = 1) => fetchAnime(`/alqanime/home?page=${page}`, 'alqanime').then(normalizeAlqHome),
+    getSchedule: () => fetchAnime('/alqanime/schedule', 'alqanime'),
+    getPopular: (page = 1) =>
+      fetchAnime(`/alqanime/popular?page=${page}`, 'alqanime').then((r) => normalizeAlqList(r, 'popular')),
+    getList: (show = 'all') =>
+      fetchAnime(`/alqanime/list?show=${encodeURIComponent(show)}`, 'alqanime').then((r) => normalizeAlqList(r)),
+    getOngoing: (page = 1) =>
+      fetchAnime(`/alqanime/ongoing?page=${page}`, 'alqanime').then((r) => normalizeAlqList(r, 'ongoing', 'Ongoing')),
+    getCompleted: (page = 1) =>
+      fetchAnime(`/alqanime/completed?page=${page}`, 'alqanime').then((r) => normalizeAlqList(r, 'completed', 'Completed')),
+    getMovies: (page = 1) =>
+      fetchAnime(`/alqanime/movie?page=${page}`, 'alqanime').then((r) => normalizeAlqList(r, 'movie', 'Movie')),
+    search: (keyword, page = 1) =>
+      fetchAnime(`/alqanime/search/${encodeURIComponent(keyword)}?page=${page}`, 'alqanime')
+        .then((r) => normalizeAlqList(r, 'search')),
+    getGenres: () => fetchAnime('/alqanime/genres', 'alqanime').then((r) => normalizeSankaGenres(r, 'alqanime')),
+    getGenreAnime: (slug, page = 1) =>
+      fetchAnime(`/alqanime/genre/${slug}?page=${page}`, 'alqanime').then((r) => normalizeAlqList(r, 'genre')),
+    getSeasonAnime: (slug) =>
+      fetchAnime(`/alqanime/season/${slug}`, 'alqanime').then((r) => normalizeAlqList(r, 'season')),
+    getAnimeDetail: (slug) =>
+      fetchAnime(`/alqanime/detail/${slug}`, 'alqanime').then((r) => normalizeAlqDetail(r, slug)),
+  },
+
+  // ── Stream / Anime Indo (sankavollerei) ──
   stream: {
-    getLatest: () => fetchAnime('/stream/latest', 'stream'),
-    getPopular: () => fetchAnime('/stream/popular', 'stream'),
-    getList: () => fetchAnime('/stream/list', 'stream'),
-    getMovie: () => fetchAnime('/stream/movie', 'stream'),
-    getGenres: () => fetchAnime('/stream/genres', 'stream'),
-    getGenreAnime: (slug) => fetchAnime(`/stream/genres/${slug}`, 'stream'),
-    search: (keyword) => fetchAnime(`/stream/search/${encodeURIComponent(keyword)}`, 'stream'),
-    getAnimeDetail: (slug) => fetchAnime(`/stream/anime/${slug}`, 'stream'),
-    getEpisodeDetail: (slug) => fetchAnime(`/stream/episode/${slug}`, 'stream', { priority: true }),
+    getLatest: (page = 1) =>
+      fetchAnime(`/stream/latest?page=${page}`, 'stream').then((r) => normalizeStreamList(r)),
+    getPopular: (page = 1) =>
+      fetchAnime(`/stream/popular?page=${page}`, 'stream').then((r) => normalizeStreamList(r)),
+    getList: () => fetchAnime('/stream/list', 'stream').then((r) => normalizeStreamList(r)),
+    getMovies: (page = 1) =>
+      fetchAnime(`/stream/movie/${page}`, 'stream').then((r) => normalizeStreamList(r, 'Movie')),
+    getGenres: () => fetchAnime('/stream/genres', 'stream').then((r) => normalizeSankaGenres(r, 'stream')),
+    getGenreAnime: (slug, page = 1) =>
+      fetchAnime(`/stream/genres/${slug}/${page}`, 'stream').then((r) => normalizeStreamList(r)),
+    search: (keyword) =>
+      fetchAnime(`/stream/search/${encodeURIComponent(keyword)}`, 'stream').then((r) => normalizeStreamList(r)),
+    getAnimeDetail: (slug) =>
+      fetchAnime(`/stream/anime/${slug}`, 'stream').then((r) => normalizeStreamDetail(r, slug)),
+    getEpisodeDetail: (slug) =>
+      fetchAnime(`/stream/episode/${slug}`, 'stream', { priority: true }).then(normalizeStreamEpisode),
   },
 };
+
 
 // Provider switching and search functionality
 export const animeAPI = {
@@ -930,21 +1040,44 @@ export const animeAPI = {
   
    // Cross-provider search with fallback
    searchWithFallback: async (keyword) => {
-     const providersToSearch = ['otakudesu', 'anoboy', 'oploverz'];
-     
+     const providersToSearch = ['otakudesu', 'samehadaku', 'anoboy', 'oploverz', 'alqanime', 'nimegami', 'stream'];
+
      for (const provider of providersToSearch) {
        try {
          const providerAPI = providers[provider];
-         if (providerAPI.search) {
-           return await providerAPI.search(keyword);
+         if (providerAPI?.search) {
+           const res = await providerAPI.search(keyword);
+           if (res?.data?.animeList?.length) return res;
          }
         } catch {
           devLog(`Search failed in ${provider}, trying next...`);
         }
      }
-     
+
      throw new Error('No providers available for search');
    },
+
+   // Cari di semua provider sekaligus, hasilnya digabung tanpa duplikat judul
+   searchAllProviders: async (keyword) => {
+     const names = ['otakudesu', 'samehadaku', 'anoboy', 'oploverz', 'alqanime', 'nimegami', 'stream'];
+     const results = await Promise.all(
+       names.map((name) =>
+         providers[name]?.search
+           ? providers[name].search(keyword).catch(() => null)
+           : Promise.resolve(null),
+       ),
+     );
+     const seen = new Map();
+     results.forEach((res, i) => {
+       (res?.data?.animeList || []).forEach((item) => {
+         const key = String(item.title || item.animeId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+         if (!key) return;
+         if (!seen.has(key)) seen.set(key, { ...item, provider: item.provider || names[i] });
+       });
+     });
+     return { data: { animeList: Array.from(seen.values()) } };
+   },
+
   
   // Get available providers (aktif di UI)
   getProviders: () => ['otakudesu', 'samehadaku', 'anoboy', 'nontonanimeid'],
@@ -976,6 +1109,78 @@ export const animeAPI = {
   getAnimeDetailNaid: (slug) => providers.nontonanimeid.getAnimeDetail(slug),
   getEpisodeDetailNaid: (slug) => providers.nontonanimeid.getEpisodeDetail(slug),
   getVideoIframeNaid: (args) => providers.nontonanimeid.getVideoIframe(args),
+
+  // ── Oploverz ──
+  getHomeOploverz: (page = 1) => providers.oploverz.getHome(page),
+  getOngoingOploverz: (page = 1) => providers.oploverz.getOngoing(page),
+  getCompletedOploverz: (page = 1) => providers.oploverz.getCompleted(page),
+  getListOploverz: (params) => providers.oploverz.getList(params),
+  getScheduleOploverz: () => providers.oploverz.getSchedule(),
+  searchOploverz: (keyword, page = 1) => providers.oploverz.search(keyword, page),
+  getAnimeDetailOploverz: (slug) => providers.oploverz.getAnimeDetail(slug),
+  getEpisodeDetailOploverz: (slug) => providers.oploverz.getEpisodeDetail(slug),
+
+  // ── Nimegami ──
+  getHomeNimegami: (page = 1) => providers.nimegami.getHome(page),
+  searchNimegami: (keyword, page = 1) => providers.nimegami.search(keyword, page),
+  getGenresNimegami: () => providers.nimegami.getGenres(),
+  getGenreAnimeNimegami: (slug, page = 1) => providers.nimegami.getGenreAnime(slug, page),
+  getSeasonsNimegami: () => providers.nimegami.getSeasons(),
+  getSeasonAnimeNimegami: (slug, page = 1) => providers.nimegami.getSeasonAnime(slug, page),
+  getTypesNimegami: () => providers.nimegami.getTypes(),
+  getTypeAnimeNimegami: (slug, page = 1) => providers.nimegami.getTypeAnime(slug, page),
+  getMoviesNimegami: (page = 1) => providers.nimegami.getMovies(page),
+  getJDramaNimegami: (page = 1) => providers.nimegami.getJDrama(page),
+  getLiveActionNimegami: (page = 1) => providers.nimegami.getLiveAction(page),
+  getLiveActionDetailNimegami: (slug) => providers.nimegami.getLiveActionDetail(slug),
+  getDramaDetailNimegami: (slug) => providers.nimegami.getDramaDetail(slug),
+  getAnimeDetailNimegami: (slug) => providers.nimegami.getAnimeDetail(slug),
+  getEpisodeDetailNimegami: (episodeId) => providers.nimegami.getEpisodeDetail(episodeId),
+
+  // ── Alqanime ──
+  getHomeAlqanime: (page = 1) => providers.alqanime.getHome(page),
+  getScheduleAlqanime: () => providers.alqanime.getSchedule(),
+  getPopularAlqanime: (page = 1) => providers.alqanime.getPopular(page),
+  getListAlqanime: (show = 'all') => providers.alqanime.getList(show),
+  getOngoingAlqanime: (page = 1) => providers.alqanime.getOngoing(page),
+  getCompletedAlqanime: (page = 1) => providers.alqanime.getCompleted(page),
+  getMoviesAlqanime: (page = 1) => providers.alqanime.getMovies(page),
+  searchAlqanime: (keyword, page = 1) => providers.alqanime.search(keyword, page),
+  getGenresAlqanime: () => providers.alqanime.getGenres(),
+  getGenreAnimeAlqanime: (slug, page = 1) => providers.alqanime.getGenreAnime(slug, page),
+  getSeasonAnimeAlqanime: (slug) => providers.alqanime.getSeasonAnime(slug),
+  getAnimeDetailAlqanime: (slug) => providers.alqanime.getAnimeDetail(slug),
+
+  // ── Stream (Anime Indo) ──
+  getLatestStream: (page = 1) => providers.stream.getLatest(page),
+  getPopularStream: (page = 1) => providers.stream.getPopular(page),
+  getListStream: () => providers.stream.getList(),
+  getMoviesStream: (page = 1) => providers.stream.getMovies(page),
+  getGenresStream: () => providers.stream.getGenres(),
+  getGenreAnimeStream: (slug, page = 1) => providers.stream.getGenreAnime(slug, page),
+  searchStream: (keyword) => providers.stream.search(keyword),
+
+  // ── Movie gabungan (Alqanime + Nimegami + Stream) ──
+  getMoviesAll: async (page = 1) => {
+    const [alq, nime, str] = await Promise.all([
+      providers.alqanime.getMovies(page).catch(() => null),
+      providers.nimegami.getMovies(page).catch(() => null),
+      providers.stream.getMovies(page).catch(() => null),
+    ]);
+    const seen = new Set();
+    const merged = [];
+    [alq, nime, str].forEach((res) => {
+      (res?.data?.animeList || []).forEach((item) => {
+        const key = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        merged.push(item);
+      });
+    });
+    return { data: { animeList: merged } };
+  },
+
+
 
   
    // Check if provider exists
