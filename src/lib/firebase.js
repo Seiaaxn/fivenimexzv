@@ -24,6 +24,8 @@ export const db = getFirestore(firebaseApp);
 // hanya video yang lewat Storage karena ukurannya jauh lebih besar.
 export const storage = getStorage(firebaseApp);
 export const googleProvider = new GoogleAuthProvider();
+// Paksa Google selalu tampilkan pemilih akun (tidak auto-login akun terakhir)
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 /**
  * Analytics only works in the browser (needs `window`/`document`).
