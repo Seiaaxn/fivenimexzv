@@ -28,7 +28,7 @@ export const watchGlobalChat = (callback) => {
 };
 
 /** Kirim pesan ke Chat Global (halaman Home). */
-export const sendGlobalChatMessage = async ({ uid, displayName, photoURL, email, level, text, replyTo = null }) => {
+export const sendGlobalChatMessage = async ({ uid, displayName, photoURL, email, level, role, text, replyTo = null }) => {
   const body = (text || '').trim();
   if (!uid || !body) return;
   await addDoc(collection(db, 'globalChat'), {
@@ -37,6 +37,7 @@ export const sendGlobalChatMessage = async ({ uid, displayName, photoURL, email,
     photoURL: photoURL || '',
     email: email || '',
     level: level || 1,
+    role: role || 'user',
     text: body.slice(0, 300),
     replyTo: replyTo || null, // { id, displayName, text }
     createdAt: serverTimestamp(),
