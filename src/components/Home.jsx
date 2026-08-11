@@ -312,6 +312,14 @@ const Home = () => {
     <AnimeRail animeList={animeList} statusOverride={statusOverride} isDonghua={isDonghua} />
   );
 
+  // "Sedang Tayang" gabungkan anime ongoing + Anime Movie.
+  // Film ditaruh di depan (dibatasi beberapa slot) supaya tidak ikut
+  // terpotong oleh RAIL_LIMIT saat anime ongoing jumlahnya sudah banyak.
+  const MOVIE_SLOTS_IN_ONGOING = 6;
+  const ongoingWithMovies = movies.length
+    ? [...movies.slice(0, MOVIE_SLOTS_IN_ONGOING), ...ongoing].slice(0, RAIL_LIMIT)
+    : ongoing;
+
 
   return (
     <div className="home-container main-container">
@@ -385,7 +393,7 @@ const Home = () => {
         {ongoing.length > 0 && (
           <div className="home-rail">
             <div className="section-header home-rail-header"><h3 className="home-rail-title">Sedang Tayang</h3><Link to="/ongoing" className="view-all">Semua →</Link></div>
-            <div className="home-rail-scroll">{buildRailItems(movies.length > 0 ? [...ongoing, ...movies] : ongoing, 'Ongoing')}</div>
+            <div className="home-rail-scroll">{buildRailItems(ongoingWithMovies, 'Ongoing')}</div>
           </div>
         )}
         {completed.length > 0 && (
