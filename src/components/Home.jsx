@@ -385,19 +385,13 @@ const Home = () => {
         {ongoing.length > 0 && (
           <div className="home-rail">
             <div className="section-header home-rail-header"><h3 className="home-rail-title">Sedang Tayang</h3><Link to="/ongoing" className="view-all">Semua →</Link></div>
-            <div className="home-rail-scroll">{buildRailItems(ongoing, 'Ongoing')}</div>
+            <div className="home-rail-scroll">{buildRailItems(movies.length > 0 ? [...ongoing, ...movies] : ongoing, 'Ongoing')}</div>
           </div>
         )}
         {completed.length > 0 && (
           <div className="home-rail">
             <div className="section-header home-rail-header"><h3 className="home-rail-title">Baru Selesai</h3><Link to="/completed" className="view-all">Semua →</Link></div>
             <div className="home-rail-scroll">{buildRailItems(completed, 'Completed')}</div>
-          </div>
-        )}
-        {movies.length > 0 && (
-          <div className="home-rail">
-            <div className="section-header home-rail-header"><h3 className="home-rail-title">Anime Movie</h3></div>
-            <div className="home-rail-scroll">{buildRailItems(movies, 'Movie')}</div>
           </div>
         )}
 
