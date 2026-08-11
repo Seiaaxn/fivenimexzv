@@ -84,6 +84,7 @@ export const useLiveUsers = (uids) => {
         email: data.email || '',
         exp: data.exp || 0,
         level: levelFromExp(data.exp || 0),
+        role: data.role || 'user',
       };
     }
   });
@@ -111,5 +112,6 @@ export const withLiveUser = (item, liveMap) => {
     photoURL: live.photoURL || item.photoURL,
     email: live.email || item.email,
     level: live.level || item.level,
+    role: live.role || item.role || 'user',
   };
 };
