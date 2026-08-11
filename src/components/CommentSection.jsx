@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { watchComments, addComment, deleteComment } from '../utils/comments';
 import { isVerifiedEmail } from '../utils/verified';
 import { isPremiumEmail } from '../utils/premium';
+import { isPremiumRole } from '../utils/roles';
 import { levelFromExp } from '../utils/levels';
 import { useLiveUsers, withLiveUser } from '../hooks/useLiveUsers';
 import VerifiedBadge from './VerifiedBadge';
@@ -21,8 +22,9 @@ const timeAgo = (createdAt) => {
   return `${Math.floor(diff / 86400)} hari lalu`;
 };
 
-const CommentAuthor = ({ uid, name, email, level }) => {
-  const owner = isPremiumEmail(email);
+const CommentAuthor = ({ uid, name, email, level, role }) => {
+  const owner = isPremiumRole({ role }, email) || isPremiumEmail(email);
+  const isSiteOwner = isPremiumEmail(email);
   return (
     <span className={`comment-item__author${owner ? ' comment-item__author--owner' : ''}`}>
       <Link to={`/u/${uid}`} className={`comment-item__name${owner ? ' comment-item__name--owner' : ''}`}>
@@ -30,7 +32,8 @@ const CommentAuthor = ({ uid, name, email, level }) => {
         {isVerifiedEmail(email) && <VerifiedBadge />}
         {owner && <PremiumBadge />}
       </Link>
-      {owner && <span className="comment-item__owner-tag">Pemilik</span>}
+      {isSiteOwner && <span className="comment-item__owner-tag">Pemilik</span>}
+      {owner && !isSiteOwner && <span className="comment-item__owner-tag" style={{ background: 'linear-gradient(135deg,#FFD86B,#F5A524)', color: '#7a4400' }}>Premium</span>}
       {level > 0 && <LevelBadge level={level} size="sm" />}
     </span>
   );
@@ -143,6 +146,7 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
         photoURL: profile?.photoURL || user.photoURL || '',
         email: user.email || '',
         level: currentLevel,
+        role: profile?.role || 'user',
         text: body,
         parentId: parentId || null,
         replyToName: replyToName || null,
@@ -168,7 +172,7 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
     const r = withLiveUser(raw, liveUsers);
     const isReplying = replyingTo?.parentId === rootId && replyingTo?.replyId === r.id;
     const level = r.level || levelFromExp(r.exp || 0) || 1;
-    const owner = isPremiumEmail(r.email);
+    const owner = isPremiumRole({ role: r.role }, r.email) || isPremiumEmail(r.email);
     return (
       <li key={r.id} className={`comment-item comment-item--reply${owner ? ' comment-item--owner' : ''}`}>
         <Link to={`/u/${r.uid}`}>
@@ -176,7 +180,7 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
         </Link>
         <div className="comment-item__body">
           <div className="comment-item__meta">
-            <CommentAuthor uid={r.uid} name={r.displayName} email={r.email} level={level} />
+            <CommentAuthor uid={r.uid} name={r.displayName} email={r.email} level={level} role={r.role} />
             <span className="comment-item__time">{timeAgo(r.createdAt)}</span>
           </div>
           {r.replyToName && r.replyToUid && (
@@ -223,7 +227,7 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
     const isReplying = replyingTo?.parentId === c.id && !replyingTo?.replyId;
     const replies = repliesByParent[c.id] || [];
     const level = c.level || levelFromExp(c.exp || 0) || 1;
-    const owner = isPremiumEmail(c.email);
+    const owner = isPremiumRole({ role: c.role }, c.email) || isPremiumEmail(c.email);
     return (
       <li key={c.id} className={`comment-item${owner ? ' comment-item--owner' : ''}`}>
         <Link to={`/u/${c.uid}`}>
@@ -231,7 +235,7 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
         </Link>
         <div className="comment-item__body">
           <div className="comment-item__meta">
-            <CommentAuthor uid={c.uid} name={c.displayName} email={c.email} level={level} />
+            <CommentAuthor uid={c.uid} name={c.displayName} email={c.email} level={level} role={c.role} />
             <span className="comment-item__time">{timeAgo(c.createdAt)}</span>
           </div>
           <p className="comment-item__text">{c.text}</p>
