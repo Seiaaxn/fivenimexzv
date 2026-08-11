@@ -1,8 +1,11 @@
-import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
-// EXP diberikan setiap kali 1 episode (anime/donghua) selesai ditonton.
-export const EXP_PER_EPISODE = 40;
+// EXP diberikan setiap kelipatan 5 menit (300 detik) NYATA menonton
+// anime/donghua. Diverifikasi ulang di firestore.rules (lihat komentar di
+// sana) supaya tidak bisa "diakalin" lewat console/devtools.
+export const EXP_PER_WATCH_BLOCK = 25;
+export const WATCH_BLOCK_SECONDS = 300;
 
 // EXP diberikan setiap kali 1 chapter komik selesai dibaca.
 export const EXP_PER_CHAPTER = 25;
@@ -70,12 +73,43 @@ const awardExp = async (uid, markerId, amount, extra = {}) => {
 };
 
 /**
- * Beri EXP untuk 1 episode (anime/donghua) yang sudah ditonton sampai
- * selesai. Marker id: `${uid}_${episodeId}`.
+ * Beri EXP untuk setiap blok 5 menit NYATA menonton anime/donghua.
+ * `blockIndex` = Math.floor(detik_nonton_terverifikasi / WATCH_BLOCK_SECONDS),
+ * dihitung di sisi pemutar video (lihat Watch.jsx) dari akumulasi waktu
+ * putar yang benar-benar berjalan (bukan cuma currentTime yang bisa
+ * dimanipulasi lewat seek/devtools).
+ *
+ * Marker id disertakan blockIndex supaya tiap blok 5 menit pada episode
+ * yang sama hanya pernah memberi EXP satu kali, dan `awardExp` di atas
+ * sudah menjaga supaya request duplikat/berbarengan tetap aman (transaksi
+ * Firestore). Proteksi tambahan (rate-limit waktu nyata + kenaikan exp
+ * yang harus persis EXP_PER_WATCH_BLOCK) ada di firestore.rules supaya
+ * tetap aman walau seseorang mencoba memanggil Firestore langsung dari
+ * console, melewati kode ini sama sekali.
  */
-export const awardEpisodeExp = (uid, episodeId) => {
-  if (!uid || !episodeId) return;
-  return awardExp(uid, `${uid}_${episodeId}`, EXP_PER_EPISODE, { episodeId, type: 'episode' });
+export const awardWatchBlockExp = (uid, episodeId, blockIndex) => {
+  if (!uid || !episodeId || !Number.isFinite(blockIndex) || blockIndex < 0) return;
+  return awardExp(
+    uid,
+    `${uid}_watchblock_${episodeId}_${blockIndex}`,
+    EXP_PER_WATCH_BLOCK,
+    { episodeId, blockIndex, type: 'watchBlock' },
+  );
+};
+
+/**
+ * Dipakai Watch.jsx untuk tahu blok mana yang sudah pernah dapat EXP di
+ * sesi sebelumnya (mis. reload halaman di tengah episode), supaya tidak
+ * mencoba award ulang blok yang sama terus-menerus secara sia-sia.
+ */
+export const hasAwardedWatchBlock = async (uid, episodeId, blockIndex) => {
+  if (!uid || !episodeId || blockIndex < 0) return false;
+  try {
+    const snap = await getDoc(doc(db, 'expLog', `${uid}_watchblock_${episodeId}_${blockIndex}`));
+    return snap.exists();
+  } catch {
+    return false;
+  }
 };
 
 /**
