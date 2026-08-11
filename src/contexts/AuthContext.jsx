@@ -68,6 +68,7 @@ export const AuthProvider = ({ children }) => {
     const userRef = doc(db, 'users', u.uid);
     const snap = await getDoc(userRef);
     if (!snap.exists()) {
+      // Pertama kali: buat dokumen baru dengan semua field default
       await setDoc(userRef, {
         displayName: u.displayName || extra.displayName || 'Pengguna',
         photoURL: u.photoURL || '',
@@ -76,7 +77,24 @@ export const AuthProvider = ({ children }) => {
         level: 1,
         exp: 0,
         createdAt: serverTimestamp(),
+        lastLoginAt: serverTimestamp(),
+        loginCount: 1,
       });
+    } else {
+      // Sudah ada: update lastLoginAt + sinkronkan nama/email terbaru dari Auth
+      // (mis. user ganti nama Google, atau email yang baru diverifikasi)
+      const patch = {
+        lastLoginAt: serverTimestamp(),
+        loginCount: (snap.data().loginCount || 0) + 1,
+      };
+      const freshName = u.displayName || extra.displayName;
+      const freshEmail = u.email;
+      // Hanya timpa kalau Auth punya data lebih segar (tidak override edit manual di profil)
+      if (freshEmail && !snap.data().email) patch.email = freshEmail;
+      if (freshName && !snap.data().displayName) patch.displayName = freshName;
+      // Selalu sinkronkan email supaya admin panel tidak tampil kosong
+      if (freshEmail) patch.email = freshEmail;
+      await setDoc(userRef, patch, { merge: true });
     }
   }, []);
 
