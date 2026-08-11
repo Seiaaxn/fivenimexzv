@@ -42,11 +42,17 @@ const AuthModal = ({ open, onClose }) => {
   const handleGoogle = async () => {
     setError(''); setInfo(''); setBusy(true);
     try {
-      await loginWithGoogle();
-      onClose?.();
+      const result = await loginWithGoogle();
+      // Kalau result undefined berarti sedang redirect ke Google — halaman akan
+      // berpindah sendiri, jadi tidak perlu tutup modal atau tampilkan error.
+      if (result !== undefined) {
+        onClose?.();
+      }
+      // Kalau redirect: biarkan busy=true, halaman akan reload setelah kembali
     } catch (err) {
       setError(err.message);
-    } finally { setBusy(false); }
+      setBusy(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -174,7 +180,7 @@ const AuthModal = ({ open, onClose }) => {
           <>
             <div className="auth-divider"><span>atau</span></div>
             <button type="button" className="auth-google-btn" onClick={handleGoogle} disabled={busy}>
-              <GoogleIcon /> {busy ? 'Memproses...' : 'Lanjutkan dengan Google'}
+              <GoogleIcon /> {busy ? 'Mengarahkan ke Google...' : 'Lanjutkan dengan Google'}
             </button>
           </>
         )}
