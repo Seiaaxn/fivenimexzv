@@ -6,7 +6,18 @@ import BookmarkButton from './BookmarkButton';
 import AuthModal from './AuthModal';
 import { getCustomAnime, listCustomAnime, buildCustomEpisodeId } from '../utils/customAnime';
 
-const PROVIDER_ORDER = ['otakudesu', 'samehadaku', 'stream'];
+// Urutan fallback provider saat membuka halaman detail.
+// Semua provider sankavollerei ikut dicoba supaya "Episode list tidak
+// tersedia" tidak muncul hanya karena provider-nya belum terdaftar.
+const PROVIDER_ORDER = [
+  'otakudesu',
+  'samehadaku',
+  'anoboy',
+  'oploverz',
+  'alqanime',
+  'nimegami',
+  'stream',
+];
 
 const AnimeDetail = () => {
   const { animeId, provider: providerParam } = useParams();
@@ -57,29 +68,48 @@ const AnimeDetail = () => {
       const fetchByProvider = async (prov, id) => {
         if (prov === 'samehadaku') return animeAPI.getAnimeDetailSamehadaku(id);
         if (prov === 'stream') return animeAPI.getAnimeDetailStream(id);
+        if (prov === 'anoboy') return animeAPI.getAnimeDetailAnoboy(id);
+        if (prov === 'oploverz') return animeAPI.getAnimeDetailOploverz(id);
+        if (prov === 'alqanime') return animeAPI.getAnimeDetailAlqanime(id);
+        if (prov === 'nimegami') return animeAPI.getAnimeDetailNimegami(id);
+        if (prov === 'nontonanimeid') return animeAPI.getAnimeDetailNaid(id);
         return animeAPI.getAnimeDetail(id);
       };
 
+
       let found = false;
+      // Payload cadangan: detail yang ketemu tapi episode list-nya kosong.
+      // Provider berikutnya tetap dicoba, siapa tahu punya daftar episode.
+      let fallback = null;
       try {
         for (const prov of orderedProviders) {
           try {
             const data = await fetchByProvider(prov, animeId);
             const payload = data?.data || null;
             if (payload) {
-              setAnime({ ...payload, __provider: prov });
-              setProviderUsed(prov);
-              found = true;
-              break;
+              const hasEpisodes = Array.isArray(payload.episodeList) && payload.episodeList.length > 0;
+              if (hasEpisodes) {
+                setAnime({ ...payload, __provider: prov });
+                setProviderUsed(prov);
+                found = true;
+                break;
+              }
+              if (!fallback) fallback = { payload, prov };
             }
           } catch (err) {
             if (err instanceof APIError && err.statusCode === 404) continue;
-            setError(err?.message ?? String(err));
-            break;
+            // Provider lain masih boleh dicoba — jangan langsung berhenti
+            continue;
           }
         }
-        if (!found && !error) { setAnime(null); setError(null); }
+        if (!found && fallback) {
+          setAnime({ ...fallback.payload, __provider: fallback.prov });
+          setProviderUsed(fallback.prov);
+          found = true;
+        }
+        if (!found) { setAnime(null); setError(null); }
       } finally { setLoading(false); }
+
     };
     fetchAnimeData();
   }, [animeId, providerParam]);
