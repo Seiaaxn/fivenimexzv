@@ -41,6 +41,18 @@ const Watch = () => {
   const savedTimeRef = useRef(0);
   const historyItemRef = useRef(null);
   const uid = user?.uid || null;
+  // Always-fresh mirror of `uid` for use inside the episode-fetch effect
+  // below, which only re-runs on `episodeId` change (not on `uid` change).
+  // Without this, that effect's async callbacks would close over whatever
+  // `uid` was at mount time (often still `null` right after a page refresh,
+  // before Firebase Auth finishes resolving the session) and every
+  // addToWatchHistory() call inside it would silently no-op forever for
+  // that episode — which is why history could fail to show up on
+  // Home/Profile/history pages even though the user was logged in.
+  const uidRef = useRef(uid);
+  useEffect(() => {
+    uidRef.current = uid;
+  }, [uid]);
 
   // ─── EXP: akumulasi waktu nonton NYATA (anti-cheat) ───
   // `watchedSecondsRef` hanya bertambah lewat event `timeupdate` ketika video
@@ -144,7 +156,7 @@ const Watch = () => {
             provider: 'custom',
           };
           historyItemRef.current = historyItem;
-          addToWatchHistory(uid, historyItem);
+          addToWatchHistory(uidRef.current, historyItem);
           setLoading(false);
           return;
         }
@@ -201,7 +213,7 @@ const Watch = () => {
           if (data.donghua_details) {
             const historyItem = { animeId: data.donghua_details.slug, episodeId, animeTitle: data.donghua_details.title, episodeTitle: data.episode, poster: data.donghua_details.poster, provider: 'donghua' };
             historyItemRef.current = historyItem;
-            addToWatchHistory(uid, historyItem);
+            addToWatchHistory(uidRef.current, historyItem);
           }
           setLoading(false); return;
         }
@@ -238,7 +250,7 @@ const Watch = () => {
             setAnimeData(animeRes?.data || null);
             const historyItem = { animeId: animeRes?.data?.animeId || normalized.animeId, episodeId, animeTitle: animeRes?.data?.title || normalized.title || episodeId, episodeTitle: normalized.title || episodeId, poster: animeRes?.data?.poster || animeRes?.data?.poster_url || '', provider: usedProvider || 'otakudesu' };
             historyItemRef.current = historyItem;
-            addToWatchHistory(uid, historyItem);
+            addToWatchHistory(uidRef.current, historyItem);
           } catch {
             // Ignore history save errors
           }
