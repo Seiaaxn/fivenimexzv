@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from '@/lib/router-compat';
 import { animeAPI } from '../services/api';
 import { addToWatchHistory, updateWatchProgress, getWatchProgress } from '../utils/watchHistory';
+import { awardWatchBlockExp, WATCH_BLOCK_SECONDS, EXP_PER_WATCH_BLOCK } from '../utils/levels';
 import { useAuth } from '../contexts/AuthContext';
 import { createPlayer } from '@videojs/react';
 import { VideoSkin, Video, videoFeatures } from '@videojs/react/video';
@@ -40,6 +41,18 @@ const Watch = () => {
   const savedTimeRef = useRef(0);
   const historyItemRef = useRef(null);
   const uid = user?.uid || null;
+
+  // ─── EXP: akumulasi waktu nonton NYATA (anti-cheat) ───
+  // `watchedSecondsRef` hanya bertambah lewat event `timeupdate` ketika video
+  // benar-benar sedang diputar, tab terlihat (bukan background), dan lompatan
+  // waktunya wajar (bukan hasil seek/skip atau memanipulasi playbackRate).
+  // Kalau seseorang cuma membuka tab lalu diam, atau nge-seek maju, atau
+  // memanggil fungsi Firestore langsung dari console, angka ini TIDAK ikut
+  // bertambah — jadi tidak bisa dipakai untuk minta EXP secara curang.
+  const watchedSecondsRef = useRef(0);
+  const lastTimeUpdateRef = useRef(null); // { videoTime, wallTime }
+  const awardedBlocksRef = useRef(new Set());
+  const [expToast, setExpToast] = useState(null); // { exp, level } | null
 
   // If Firebase Auth hasn't finished resolving the session yet when this
   // page first loads (common right after a refresh), the very first
@@ -83,6 +96,13 @@ const Watch = () => {
     setVideoFailed(false);
     setSwitching(false);
     historyItemRef.current = null;
+
+    // Reset akumulasi waktu nonton nyata setiap ganti episode, supaya EXP
+    // selalu dihitung dari nol per episode (tidak bisa "bawa" akumulasi
+    // dari episode lain).
+    watchedSecondsRef.current = 0;
+    lastTimeUpdateRef.current = null;
+    awardedBlocksRef.current = new Set();
 
     const fetchEpisodeData = async () => {
       try {
@@ -263,6 +283,48 @@ const Watch = () => {
       if (vid.currentTime > 5) updateWatchProgress(uid, episodeId, vid.currentTime, vid.duration);
     };
 
+    // ─── EXP anti-cheat: hanya hitung waktu yang BENAR-BENAR berjalan ───
+    // Setiap `timeupdate` (native, ±250ms saat playing), bandingkan selisih
+    // waktu video dengan selisih waktu jam sungguhan (performance.now()).
+    // Kalau keduanya cocok (video maju secara wajar, bukan lompat karena
+    // seek, dan tab sedang aktif), baru dihitung sebagai detik nonton
+    // nyata. Ini membuat trik umum (seek ke akhir, tab disembunyikan,
+    // playbackRate dipercepat, atau memanggil awardWatchBlockExp langsung
+    // dari console) tidak menghasilkan EXP — karena akumulasinya cuma naik
+    // lewat pola play yang wajar, dan pemberian EXP-nya sendiri masih
+    // divalidasi ulang di firestore.rules (rate-limit + jumlah exp tetap).
+    const onTimeUpdate = () => {
+      const now = performance.now() / 1000;
+      const videoTime = vid.currentTime;
+      const prev = lastTimeUpdateRef.current;
+      lastTimeUpdateRef.current = { videoTime, wallTime: now };
+
+      if (!prev || vid.paused || vid.seeking || document.visibilityState !== 'visible') return;
+
+      const wallDelta = now - prev.wallTime;
+      const videoDelta = videoTime - prev.videoTime;
+      // Wajar: video maju kira-kira sebesar waktu jam yang lewat (toleransi
+      // buffering kecil), dan tidak dalam lompatan besar (seek).
+      const isPlausiblePlayback =
+        wallDelta > 0 && wallDelta < 2 &&
+        videoDelta > 0 && Math.abs(videoDelta - wallDelta) < 1.5;
+
+      if (!isPlausiblePlayback) return;
+
+      watchedSecondsRef.current += Math.min(wallDelta, videoDelta);
+
+      const completedBlocks = Math.floor(watchedSecondsRef.current / WATCH_BLOCK_SECONDS);
+      if (completedBlocks > 0 && uid) {
+        for (let b = 0; b < completedBlocks; b++) {
+          if (!awardedBlocksRef.current.has(b)) {
+            awardedBlocksRef.current.add(b);
+            awardWatchBlockExp(uid, episodeId, b);
+            setExpToast({ exp: EXP_PER_WATCH_BLOCK, key: `${episodeId}-${b}-${Date.now()}` });
+          }
+        }
+      }
+    };
+
     const onError = () => {
       const lastPos = vid.currentTime || 0;
       devWarn(`[Watch] Video error at ${lastPos}s, retry #${retryCountRef.current + 1}`);
@@ -305,6 +367,10 @@ const Watch = () => {
       if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
     };
 
+    // Tab disembunyikan/kembali terlihat: buang sampel waktu terakhir supaya
+    // jeda saat di background tidak ikut terhitung sebagai nonton nyata.
+    const onVisibilityChange = () => { lastTimeUpdateRef.current = null; };
+
     vid.addEventListener('loadeddata', onLoaded);
     vid.addEventListener('pause', onPause);
     vid.addEventListener('play', onPlay);
@@ -312,6 +378,9 @@ const Watch = () => {
     vid.addEventListener('error', onError);
     vid.addEventListener('stalled', onStalled);
     vid.addEventListener('playing', onPlaying);
+    vid.addEventListener('timeupdate', onTimeUpdate);
+    vid.addEventListener('seeking', onVisibilityChange);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
       vid.removeEventListener('loadeddata', onLoaded);
@@ -321,11 +390,21 @@ const Watch = () => {
       vid.removeEventListener('error', onError);
       vid.removeEventListener('stalled', onStalled);
       vid.removeEventListener('playing', onPlaying);
+      vid.removeEventListener('timeupdate', onTimeUpdate);
+      vid.removeEventListener('seeking', onVisibilityChange);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (saveTimerRef.current) { clearInterval(saveTimerRef.current); saveTimerRef.current = null; }
       if (stallTimer) clearTimeout(stallTimer);
       cancelled = true;
     };
   }, [videoUrl, episodeId, uid]);
+
+  // Toast "+25 EXP" otomatis hilang setelah beberapa detik.
+  useEffect(() => {
+    if (!expToast) return;
+    const t = setTimeout(() => setExpToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [expToast]);
 
   // ─── Auto-rotate on fullscreen (mobile) ───
   useEffect(() => {
@@ -487,6 +566,22 @@ const Watch = () => {
 
   return (
     <div className="watch-page main-container">
+      {expToast && (
+        <div
+          key={expToast.key}
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed', top: '16px', right: '16px', zIndex: 9999,
+            background: 'var(--color-primary)', color: '#fff',
+            padding: '10px 16px', borderRadius: '10px', fontWeight: 700,
+            fontSize: 'var(--text-sm)', boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+            animation: 'watch-exp-toast-in 0.25s ease-out',
+          }}
+        >
+          +{expToast.exp} EXP — 5 menit menonton!
+        </div>
+      )}
       <div style={{ marginBottom: '12px' }}>
         {hasBack? (
           <Link to={backHref} className="back-link">Kembali ke {(animeData?.title || 'Anime').substring(0, 40)}</Link>
