@@ -36,6 +36,7 @@ const Watch = () => {
   const [videoFailed, setVideoFailed] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [buffering, setBuffering] = useState(false);
+  const [videoReady, setVideoReady] = useState(false); // trigger EXP effect ketika video element tersedia
   const videoElRef = useRef(null);
   const saveTimerRef = useRef(null);
   const savedTimeRef = useRef(0);
@@ -409,7 +410,7 @@ const Watch = () => {
       if (stallTimer) clearTimeout(stallTimer);
       cancelled = true;
     };
-  }, [videoUrl, episodeId, uid]);
+  }, [videoUrl, episodeId, uid, videoReady]);
 
   // Toast "+25 EXP" otomatis hilang setelah beberapa detik.
   useEffect(() => {
@@ -619,13 +620,16 @@ const Watch = () => {
               <VideoSkin>
                 <Video
                   ref={(el) => {
+                    const prev = videoElRef.current;
                     videoElRef.current = el;
-                    if (el) {
+                    if (el && el !== prev) {
                       el.onerror = () => {
                         devLog('[Watch] Video.js failed, falling back to iframe');
                         setVideoFailed(true);
                         setSwitching(false);
                       };
+                      // Trigger ulang EXP effect setelah video element benar-benar ada
+                      setVideoReady((n) => n + 1);
                     }
                   }}
                   src={videoUrl}
