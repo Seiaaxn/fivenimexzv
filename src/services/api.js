@@ -294,7 +294,283 @@ const fetchAnime = async (endpoint, _provider = 'default', { priority = false, s
   return enqueue(doFetch);
 };
 
+// ═══════════════════════════════════════════════════════
+// ANOBOY NORMALIZER
+// Respons mentah Anoboy: { status, source, anime_list | genres | detail | streams }
+// Dibuat menyerupai bentuk otakudesu/samehadaku: { data: { animeList | ... } }
+// ═══════════════════════════════════════════════════════
+const anoboyEpisodeNumber = (value, title = '') => {
+  const fromField = Number(String(value ?? '').replace(/[^\d]/g, ''));
+  if (fromField) return fromField;
+  const m = String(title).match(/episode\s*(\d+)/i);
+  return m ? Number(m[1]) : 0;
+};
+
+// Slug rilisan terbaru Anoboy berupa slug EPISODE
+// ("solo-leveling-episode-1-subtitle-indonesia"). Untuk kartu anime kita
+// butuh slug ANIME-nya ("solo-leveling"), jadi bagian episode dipotong.
+export const anoboyAnimeSlugFromEpisode = (slug = '') =>
+  slug.replace(/-episode-\d+.*$/i, '').replace(/-subtitle-indonesia$/i, '');
+
+export const normalizeAnoboyList = (res) => {
+  const list = Array.isArray(res?.anime_list) ? res.anime_list : [];
+  return {
+    data: {
+      animeList: list.map((item) => {
+        const isEpisodeSlug = /-episode-\d+/i.test(item.slug || '');
+        return {
+        animeId: isEpisodeSlug ? anoboyAnimeSlugFromEpisode(item.slug) : item.slug,
+        episodeId: isEpisodeSlug ? item.slug : null,
+        slug: item.slug,
+        title: isEpisodeSlug
+          ? (item.title || '').replace(/\s*Episode\s*\d+.*$/i, '').trim()
+          : (item.title || ''),
+        poster: item.poster || '',
+        status: item.status || '',
+        type: item.type || '',
+        // "Ep 7" → 7 (dipakai badge episode di AnimeCard)
+        episodes: anoboyEpisodeNumber(item.episode, item.title),
+        episodeLabel: item.episode || '',
+        href: item.url || '',
+        provider: 'anoboy',
+        providers: ['anoboy'],
+        };
+      }),
+    },
+    pagination: { currentPage: res?.page ?? null },
+  };
+};
+
+export const normalizeAnoboyGenres = (res) => ({
+  data: {
+    genreList: (Array.isArray(res?.genres) ? res.genres : []).map((g) => ({
+      genreId: g.slug,
+      slug: g.slug,
+      title: g.name || g.slug,
+      provider: 'anoboy',
+    })),
+  },
+});
+
+export const normalizeAnoboyDetail = (res, slug) => {
+  const d = res?.detail;
+  if (!d) return { data: null };
+  const info = d.info || {};
+  const episodeList = (Array.isArray(d.episode_list) ? d.episode_list : []).map((ep) => ({
+    episodeId: ep.slug,
+    slug: ep.slug,
+    title: ep.title || `Episode ${ep.episode}`,
+    episode: anoboyEpisodeNumber(ep.episode, ep.title),
+    releaseDate: ep.release_date || '',
+  }));
+
+  return {
+    data: {
+      animeId: slug,
+      slug,
+      title: d.title || '',
+      poster: d.poster || '',
+      synopsis: d.synopsis || '',
+      description: d.synopsis || '',
+      status: info.status || '',
+      type: info.type || '',
+      studios: info.studio || '',
+      aired: info.released || '',
+      season: info.season || '',
+      duration: info.duration || '',
+      score: d.score || info.score || '',
+      episodes: Number(info.episodes) || episodeList.length,
+      genreList: (Array.isArray(d.genres) ? d.genres : []).map((g) => ({
+        genreId: g.slug,
+        title: g.name || g.slug,
+      })),
+      episodeList,
+      provider: 'anoboy',
+    },
+  };
+};
+
+export const normalizeAnoboyEpisode = (res) => {
+  const streams = Array.isArray(res?.streams) ? res.streams : [];
+  const servers = streams.map((s, i) => ({
+    title: s.name || `Server ${i + 1}`,
+    name: s.name || `Server ${i + 1}`,
+    url: s.url,
+    quality: 'Streaming',
+  }));
+  if (!servers.length) return { data: null };
+  return {
+    data: {
+      title: res.title || '',
+      animeId: res.anime_slug || '',
+      defaultStreamingUrl: servers[0].url,
+      servers,
+      downloads: Array.isArray(res.downloads) ? res.downloads : [],
+      provider: 'anoboy',
+    },
+  };
+};
+
+// ═══════════════════════════════════════════════════════
+// NONTONANIMEID (scraper internal, lewat /api/public/nontonanimeid)
+// Semua respons di-normalisasi ke bentuk { data: { animeList } } supaya
+// komponen yang sudah ada bisa memakainya sama seperti provider lain.
+// ═══════════════════════════════════════════════════════
+const NAID_ENDPOINT = '/api/public/nontonanimeid';
+
+const naidSlug = (link = '') => {
+  const path = String(link).replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '');
+  return path.split('/').filter(Boolean).pop() || '';
+};
+
+const naidEpisodeNumber = (value, title = '') => {
+  const fromField = Number(String(value ?? '').replace(/[^\d]/g, ''));
+  if (fromField) return fromField;
+  const m = String(title).match(/episode\s*(\d+)/i);
+  return m ? Number(m[1]) : 0;
+};
+
+const naidCleanTitle = (title = '') =>
+  String(title)
+    .replace(/\s*Episode\s*\d+.*$/i, '')
+    .replace(/^Nonton\s+/i, '')
+    .replace(/\s*Sub(title)?\s*Indo(nesia)?$/i, '')
+    .trim();
+
+const fetchNaid = async (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') query.append(k, String(v));
+  });
+  const url = `${NAID_ENDPOINT}?${query.toString()}`;
+
+  const cached = getFromCache(url);
+  if (cached) return cached;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`NontonAnimeID request failed (${res.status})`);
+  const body = await res.json();
+  if (!body?.ok) throw new Error(body?.error || 'NontonAnimeID scrape failed');
+  setCache(url, body.data);
+  return body.data;
+};
+
+const naidCardToAnime = (item, status) => {
+  const link = item.link || item.url || '';
+  const slug = naidSlug(link);
+  const isEpisode = /-episode-\d+/i.test(slug) || /episode/i.test(item.episode || '');
+  return {
+    animeId: slug,
+    slug,
+    episodeId: isEpisode && /-episode-\d+/i.test(slug) ? slug : null,
+    title: naidCleanTitle(item.title),
+    poster: item.image || item.poster || '',
+    status: item.status || status || '',
+    type: item.type || '',
+    score: item.rating || item.score || '',
+    episodes: naidEpisodeNumber(item.current_episode || item.episode, item.title),
+    episodeLabel: item.current_episode || item.episode || '',
+    href: link,
+    genres: Array.isArray(item.genres) ? item.genres : [],
+    provider: 'nontonanimeid',
+    providers: ['nontonanimeid'],
+  };
+};
+
+export const normalizeNaidList = (data, status) => {
+  const list = Array.isArray(data) ? data : [];
+  return {
+    data: { animeList: list.map((item) => naidCardToAnime(item, status)).filter((a) => a.title && a.slug) },
+  };
+};
+
+export const normalizeNaidHome = (data) => ({
+  data: {
+    latest: (data?.episode_terbaru || []).map((i) => naidCardToAnime(i, 'Ongoing')),
+    ongoing: (data?.series_terbaru_tv || []).map((i) => naidCardToAnime(i, 'Ongoing')),
+    movies: (data?.series_terbaru_movie || []).map((i) => naidCardToAnime(i)),
+    popular: (data?.popular_series_semua || []).map((i) => naidCardToAnime(i)),
+  },
+});
+
+export const normalizeNaidGenres = (data) => ({
+  data: {
+    genreList: (Array.isArray(data) ? data : []).map((g) => ({
+      genreId: g.slug,
+      slug: g.slug,
+      title: g.name || g.slug,
+      poster: g.image || '',
+      provider: 'nontonanimeid',
+    })),
+  },
+});
+
+export const normalizeNaidDetail = (data, slug) => {
+  if (!data?.title) return { data: null };
+  const details = data.details || {};
+  return {
+    data: {
+      animeId: slug,
+      slug,
+      title: naidCleanTitle(data.title),
+      poster: data.poster || '',
+      synopsis: data.synopsis || '',
+      description: data.synopsis || '',
+      status: data.status || details['Status'] || '',
+      type: data.type || details['Type'] || '',
+      studios: details['Studio'] || details['Studios'] || '',
+      aired: details['Released'] || details['Aired'] || '',
+      season: data.season || '',
+      duration: data.episode_duration || details['Duration'] || '',
+      score: data.score || '',
+      trailer: data.trailer || '',
+      episodes: naidEpisodeNumber(data.total_episodes) || (data.episodes || []).length,
+      genreList: (data.genres || []).map((g) => ({ genreId: naidSlug(g.link), title: g.name })),
+      episodeList: (data.episodes || []).map((ep) => ({
+        episodeId: naidSlug(ep.link),
+        slug: naidSlug(ep.link),
+        title: ep.title || '',
+        episode: naidEpisodeNumber(ep.title, ep.title),
+        releaseDate: ep.date || '',
+      })),
+      recommendations: (data.recommended_series || []).map((i) => naidCardToAnime(i)),
+      provider: 'nontonanimeid',
+    },
+  };
+};
+
+export const normalizeNaidEpisode = (data) => {
+  const servers = [];
+  if (data?.default_video_url) {
+    servers.push({ title: 'Default', name: 'Default', url: data.default_video_url, quality: 'Streaming' });
+  }
+  (data?.video_servers || []).forEach((s, i) => {
+    servers.push({
+      title: s.server_name || `Server ${i + 1}`,
+      name: s.server_name || `Server ${i + 1}`,
+      url: '',
+      quality: 'Streaming',
+      naid: { post: s.post_id, nume: s.nume, server: s.server_type, nonce: data.nonce, ajaxUrl: data.ajax_url },
+    });
+  });
+  if (!servers.length) return { data: null };
+  return {
+    data: {
+      title: data.title || '',
+      animeId: naidSlug(data.anime_link || ''),
+      defaultStreamingUrl: data.default_video_url || '',
+      servers,
+      downloads: data.download_links || [],
+      prevEpisode: data.prev_episode_link ? { episodeId: naidSlug(data.prev_episode_link) } : null,
+      nextEpisode: data.next_episode_link ? { episodeId: naidSlug(data.next_episode_link) } : null,
+      provider: 'nontonanimeid',
+    },
+  };
+};
+
 // Provider-specific API endpoints
+
+
 const providers = {
   otakudesu: {
     getHome: () => fetchAnime('/home', 'otakudesu'),
@@ -347,16 +623,68 @@ const providers = {
     search: (keyword) => fetchAnime(`/kusonime/search/${encodeURIComponent(keyword)}`, 'kusonime'),
   },
   
+  // ── Anoboy (sankavollerei) ──
+  // Semua endpoint di-normalisasi jadi bentuk { data: { animeList } } /
+  // { data: { ...detail } } supaya komponen yang sudah ada (Home, Genres,
+  // Search, AZList, AnimeDetail, Watch) bisa memakainya tanpa cabang khusus,
+  // persis seperti otakudesu & samehadaku.
   anoboy: {
-    getHome: () => fetchAnime('/anoboy/home', 'anoboy'),
-    getList: () => fetchAnime('/anoboy/list', 'anoboy'),
-    getGenres: () => fetchAnime('/anoboy/genres', 'anoboy'),
-    getGenreAnime: (slug) => fetchAnime(`/anoboy/genre/${slug}`, 'anoboy'),
-    search: (keyword) => fetchAnime(`/anoboy/search/${encodeURIComponent(keyword)}`, 'anoboy'),
-    getAnimeDetail: (slug) => fetchAnime(`/anoboy/anime/${slug}`, 'anoboy'),
-    getEpisodeDetail: (slug) => fetchAnime(`/anoboy/episode/${slug}`, 'anoboy'),
-    getAZList: () => fetchAnime('/anoboy/az-list', 'anoboy'),
+    getHome: (page = 1) =>
+      fetchAnime(`/anoboy/home?page=${page}`, 'anoboy').then(normalizeAnoboyList),
+    getList: ({ status = '', type = '', order = 'update', page = 1 } = {}) =>
+      fetchAnime(
+        `/anoboy/list?${new URLSearchParams({
+          ...(status ? { status } : {}),
+          ...(type ? { type } : {}),
+          ...(order ? { order } : {}),
+          page: String(page),
+        }).toString()}`,
+        'anoboy',
+      ).then(normalizeAnoboyList),
+    getGenres: () => fetchAnime('/anoboy/genres', 'anoboy').then(normalizeAnoboyGenres),
+    getGenreAnime: (slug, page = 1) =>
+      fetchAnime(`/anoboy/genre/${slug}?page=${page}`, 'anoboy').then(normalizeAnoboyList),
+    getAZList: (letter = 'A', page = 1) =>
+      fetchAnime(`/anoboy/az-list?page=${page}&show=${encodeURIComponent(letter)}`, 'anoboy')
+        .then(normalizeAnoboyList),
+    search: (keyword, page = 1) =>
+      fetchAnime(
+        `/anoboy/search/${encodeURIComponent(keyword)}?page=${page}`,
+        'anoboy',
+      ).then(normalizeAnoboyList),
+    getAnimeDetail: (slug) =>
+      fetchAnime(`/anoboy/anime/${slug}`, 'anoboy').then((res) => normalizeAnoboyDetail(res, slug)),
+    getEpisodeDetail: (slug) =>
+      fetchAnime(`/anoboy/episode/${slug}`, 'anoboy', { priority: true })
+        .then(normalizeAnoboyEpisode),
   },
+
+  // ── NontonAnimeID (scraper internal via /api/public/nontonanimeid) ──
+  nontonanimeid: {
+    getHome: () => fetchNaid({ action: 'home' }).then(normalizeNaidHome),
+    getOngoing: (page = 1) =>
+      fetchNaid({ action: 'ongoing', page }).then((d) => normalizeNaidList(d, 'Ongoing')),
+    getList: (page = 1, filters = {}) =>
+      fetchNaid({ action: 'list', page, ...filters }).then((d) => normalizeNaidList(d)),
+    getCompleted: (page = 1) =>
+      fetchNaid({ action: 'list', page, status: 'Completed' }).then((d) =>
+        normalizeNaidList(d, 'Completed'),
+      ),
+    getPopular: (page = 1) => fetchNaid({ action: 'popular', page }),
+    getSchedule: () => fetchNaid({ action: 'schedule' }),
+    getGenres: () => fetchNaid({ action: 'genres' }).then(normalizeNaidGenres),
+    getGenreAnime: (slug, page = 1) =>
+      fetchNaid({ action: 'genre', slug, page }).then((d) => normalizeNaidList(d)),
+    search: (keyword, page = 1) =>
+      fetchNaid({ action: 'search', q: keyword, page }).then((d) => normalizeNaidList(d)),
+    getAnimeDetail: (slug) =>
+      fetchNaid({ action: 'detail', slug }).then((d) => normalizeNaidDetail(d, slug)),
+    getEpisodeDetail: (slug) =>
+      fetchNaid({ action: 'stream', slug }).then(normalizeNaidEpisode),
+    getVideoIframe: ({ post, nume, server, nonce, ajaxUrl }) =>
+      fetchNaid({ action: 'iframe', post, nume, server, nonce, ajax_url: ajaxUrl }),
+  },
+
 
   oploverz: {
     getHome: () => fetchAnime('/oploverz/home', 'oploverz'),
@@ -619,7 +947,36 @@ export const animeAPI = {
    },
   
   // Get available providers (aktif di UI)
-  getProviders: () => ['otakudesu', 'samehadaku'],
+  getProviders: () => ['otakudesu', 'samehadaku', 'anoboy', 'nontonanimeid'],
+
+  // ── Anoboy ──
+  getHomeAnoboy: (page = 1) => providers.anoboy.getHome(page),
+  getListAnoboy: (params) => providers.anoboy.getList(params),
+  getGenresAnoboy: () => providers.anoboy.getGenres(),
+  getGenreAnimeAnoboy: (slug, page = 1) => providers.anoboy.getGenreAnime(slug, page),
+  getAZListAnoboy: (letter = 'A', page = 1) => providers.anoboy.getAZList(letter, page),
+  searchAnoboy: (keyword, page = 1) => providers.anoboy.search(keyword, page),
+  getAnimeDetailAnoboy: (slug) => providers.anoboy.getAnimeDetail(slug),
+  getEpisodeDetailAnoboy: (slug) => providers.anoboy.getEpisodeDetail(slug),
+  getOngoingAnoboy: (page = 1) =>
+    providers.anoboy.getList({ status: 'ongoing', type: 'tv', order: 'update', page }),
+  getCompletedAnoboy: (page = 1) =>
+    providers.anoboy.getList({ status: 'completed', type: 'tv', order: 'update', page }),
+
+  // ── NontonAnimeID ──
+  getHomeNaid: () => providers.nontonanimeid.getHome(),
+  getOngoingNaid: (page = 1) => providers.nontonanimeid.getOngoing(page),
+  getCompletedNaid: (page = 1) => providers.nontonanimeid.getCompleted(page),
+  getListNaid: (page = 1, filters = {}) => providers.nontonanimeid.getList(page, filters),
+  getPopularNaid: (page = 1) => providers.nontonanimeid.getPopular(page),
+  getScheduleNaid: () => providers.nontonanimeid.getSchedule(),
+  getGenresNaid: () => providers.nontonanimeid.getGenres(),
+  getGenreAnimeNaid: (slug, page = 1) => providers.nontonanimeid.getGenreAnime(slug, page),
+  searchNaid: (keyword, page = 1) => providers.nontonanimeid.search(keyword, page),
+  getAnimeDetailNaid: (slug) => providers.nontonanimeid.getAnimeDetail(slug),
+  getEpisodeDetailNaid: (slug) => providers.nontonanimeid.getEpisodeDetail(slug),
+  getVideoIframeNaid: (args) => providers.nontonanimeid.getVideoIframe(args),
+
   
    // Check if provider exists
    hasProvider: (provider) => Object.prototype.hasOwnProperty.call(providers, provider),
