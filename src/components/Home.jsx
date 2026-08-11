@@ -7,7 +7,7 @@ import Footer from './Footer';
 import GlobalChatBar from './GlobalChatBar';
 import AnnouncementBanner from './AnnouncementBanner';
 import { watchUserHistory, formatTime } from '../utils/watchHistory';
-import { mergeAnimeLists } from '../utils/animeUtils';
+import { mergeAnimeLists, mergeProviderLists } from '../utils/animeUtils';
 import { listCustomAnimeByStatus } from '../utils/customAnime';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -79,15 +79,17 @@ const AnimeRail = memo(({ animeList, statusOverride, isDonghua = false }) => {
     const providers = anime.providers || (anime.provider ? [anime.provider] : []);
     const hasOtak = providers.includes('otakudesu');
     const hasSame = providers.includes('samehadaku');
+    const hasAnoboy = providers.includes('anoboy');
     const isCustomItem = anime.provider === 'custom';
     let providerHint = 'Otakudesu';
     if (isCustomItem) providerHint = 'FiveNime';
     else if (hasOtak && hasSame) providerHint = 'Otakudesu & Samehadaku';
     else if (hasSame) providerHint = 'Samehadaku';
+    else if (hasAnoboy) providerHint = 'Anoboy';
     return (
       <div className="home-rail-card" key={anime.animeId ?? anime.slug ?? idx}>
         <AnimeCard
-          anime={{ ...anime, provider: isCustomItem ? 'custom' : (hasOtak ? 'otakudesu' : (hasSame ? 'samehadaku' : anime.provider)) }}
+          anime={{ ...anime, provider: isCustomItem ? 'custom' : (hasOtak ? 'otakudesu' : (hasSame ? 'samehadaku' : (hasAnoboy ? 'anoboy' : anime.provider))) }}
           index={idx}
           statusOverride={statusOverride}
           providerHint={providerHint}
@@ -141,9 +143,12 @@ const Home = () => {
     };
 
     const fetchSecondary = async (otakOngoing, otakCompleted) => {
-      const [sameOngoingRes, sameCompletedRes, scheduleRes, donghuaOngoingRes, donghuaCompletedRes, customOngoing, customCompleted] = await Promise.all([
+      const [sameOngoingRes, sameCompletedRes, anoboyLatestRes, anoboyOngoingRes, anoboyCompletedRes, scheduleRes, donghuaOngoingRes, donghuaCompletedRes, customOngoing, customCompleted] = await Promise.all([
         animeAPI.getOngoingSamehadaku().catch(() => null),
         animeAPI.getCompletedSamehadaku().catch(() => null),
+        animeAPI.getHomeAnoboy(1).catch(() => null),
+        animeAPI.getOngoingAnoboy(1).catch(() => null),
+        animeAPI.getCompletedAnoboy(1).catch(() => null),
         animeAPI.getSchedule().catch(() => null),
         animeAPI.getDonghuaOngoing(1).catch(() => null),
         animeAPI.getDonghuaCompleted(1).catch(() => null),
@@ -154,17 +159,40 @@ const Home = () => {
 
       const sameOngoing = sameOngoingRes?.data?.animeList || [];
       const sameCompleted = sameCompletedRes?.data?.animeList || [];
+      // Anoboy: rilisan terbaru (home) + list ongoing/completed
+      const anoboyLatest = anoboyLatestRes?.data?.animeList || [];
+      const anoboyOngoing = anoboyOngoingRes?.data?.animeList || [];
+      const anoboyCompleted = anoboyCompletedRes?.data?.animeList || [];
+
+      // Rilisan terbaru Anoboy digabung ke daftar "Sedang Tayang".
+      // Judul yang sama dari provider lain otomatis dijadikan satu kartu
+      // (mergeProviderLists memakai judul yang dinormalisasi sebagai kunci).
+      const mergedOngoing = mergeProviderLists(
+        mergeProviderLists(
+          mergeAnimeLists(otakOngoing, sameOngoing, 'Ongoing'),
+          anoboyOngoing,
+          { primaryName: 'otakudesu', secondaryName: 'anoboy', status: 'Ongoing' },
+        ),
+        anoboyLatest,
+        { primaryName: 'otakudesu', secondaryName: 'anoboy', status: 'Ongoing' },
+      );
 
       setHomeData({
         ongoing: [
           ...customOngoing.map((a) => ({ ...a, provider: 'custom' })),
-          ...mergeAnimeLists(otakOngoing, sameOngoing, 'Ongoing'),
+          ...mergedOngoing,
         ],
         completed: [
           ...customCompleted.map((a) => ({ ...a, provider: 'custom' })),
-          ...mergeAnimeLists(otakCompleted, sameCompleted, 'Completed'),
+          ...mergeProviderLists(
+            mergeAnimeLists(otakCompleted, sameCompleted, 'Completed'),
+            anoboyCompleted,
+            { primaryName: 'otakudesu', secondaryName: 'anoboy', status: 'Completed' },
+          ),
         ],
       });
+
+
       setDonghuaData({
         ongoing: donghuaOngoingRes?.ongoing_donghua || [],
         completed: donghuaCompletedRes?.completed_donghua || [],
@@ -223,6 +251,7 @@ const Home = () => {
 
   const ongoing = homeData?.ongoing || [];
   const completed = homeData?.completed || [];
+  
   const donghuaOngoing = donghuaData?.ongoing || [];
   const donghuaCompleted = donghuaData?.completed || [];
   const komikLatest = komikData?.latest || [];
