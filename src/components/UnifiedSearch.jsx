@@ -68,15 +68,16 @@ const UnifiedSearch = () => {
       setLoading(true);
       setError(null);
 
-      // Search anime, donghua, komik, dan anime custom upload admin secara paralel
+      // Search anime (semua provider), donghua, komik, dan anime custom upload admin
       const [animeRes, donghuaRes, komikRes, customList] = await Promise.all([
-        animeAPI.search(searchQuery).catch(() => ({ data: { animeList: [] } })),
+        animeAPI.searchAllProviders(searchQuery).catch(() => ({ data: { animeList: [] } })),
         animeAPI.searchDonghua(searchQuery).catch(() => ({ data: [] })),
         comicAPI.searchComics(searchQuery, { page: 1 }).catch(() => ({ comics: [] })),
         searchCustomAnime(searchQuery).catch(() => []),
       ]);
 
       const animeList = animeRes?.data?.animeList || [];
+
       const donghuaList = Array.isArray(donghuaRes?.data)? donghuaRes.data : [];
       const komikList = komikRes?.comics || [];
 
