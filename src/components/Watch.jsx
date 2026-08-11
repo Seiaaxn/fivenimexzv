@@ -130,12 +130,18 @@ const Watch = () => {
         }
 
         const stateProvider = location.state?.provider;
-        const allProviders = [
-          { fn: () => animeAPI.getDonghuaEpisode(episodeId), name: 'donghua' },
-          { fn: () => animeAPI.getEpisodeDetail(episodeId), name: 'otakudesu' },
-          { fn: () => animeAPI.getEpisodeDetailSamehadaku(episodeId), name: 'samehadaku' },
-          { fn: () => animeAPI.getEpisodeDetailStream(episodeId), name: 'stream' },
-        ];
+        const isNimegamiEp = String(episodeId).includes('$$');
+        const allProviders = isNimegamiEp
+          ? [{ fn: () => animeAPI.getEpisodeDetailNimegami(episodeId), name: 'nimegami' }]
+          : [
+              { fn: () => animeAPI.getDonghuaEpisode(episodeId), name: 'donghua' },
+              { fn: () => animeAPI.getEpisodeDetail(episodeId), name: 'otakudesu' },
+              { fn: () => animeAPI.getEpisodeDetailSamehadaku(episodeId), name: 'samehadaku' },
+              { fn: () => animeAPI.getEpisodeDetailAnoboy(episodeId), name: 'anoboy' },
+              { fn: () => animeAPI.getEpisodeDetailOploverz(episodeId), name: 'oploverz' },
+              { fn: () => animeAPI.getEpisodeDetailStream(episodeId), name: 'stream' },
+            ];
+
 
         let providers;
         if (stateProvider) {
