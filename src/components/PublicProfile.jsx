@@ -5,6 +5,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { isVerifiedEmail } from '../utils/verified';
 import { isPremiumEmail } from '../utils/premium';
+import { isPremiumRole } from '../utils/roles';
 import { levelProgress } from '../utils/levels';
 import { useLiveUsers } from '../hooks/useLiveUsers';
 import { groupByType, CONTENT_TYPES, CONTENT_TYPE_LABELS } from '../utils/bookmarks';
@@ -219,7 +220,8 @@ const PublicProfile = () => {
 
   const displayName = targetProfile.displayName || 'Pengguna';
   const verified = isVerifiedEmail(targetProfile.email);
-  const premium = isPremiumEmail(targetProfile.email);
+  const premium = isPremiumRole(targetProfile, targetProfile.email); // role-based
+  const isOwner = isPremiumEmail(targetProfile.email); // hanya email pemilik situs
   const statsPublic = targetProfile.statsPublic !== false;
   const stats = targetProfile.stats || {};
   const lvProgress = levelProgress(targetProfile.exp || 0);
@@ -244,7 +246,8 @@ const PublicProfile = () => {
             </h1>
             <p className="pp-handle">
               @{uid?.slice(0, 10)}
-              {premium && <span className="pp-owner-tag">Pemilik FiveNime</span>}
+              {isOwner && <span className="pp-owner-tag">Pemilik FiveNime</span>}
+              {premium && !isOwner && <span className="pp-owner-tag" style={{ background: 'linear-gradient(135deg,#FFD86B,#F5A524)', color: '#7a4400' }}>Premium</span>}
             </p>
 
             {/* Level row */}
