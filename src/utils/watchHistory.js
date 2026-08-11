@@ -11,17 +11,15 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { awardEpisodeExp } from './levels';
 
 const MAX_ITEMS = 100;
 
-// Episode dianggap "selesai ditonton" (dan berhak dapat EXP) begitu sisa
-// durasinya tinggal <= 30 detik, atau sudah menonton >= 90% dari total durasi.
-const isEpisodeFinished = (currentTime, duration) => {
-  if (!duration || duration <= 0) return false;
-  const remaining = duration - currentTime;
-  return remaining <= 30 || currentTime / duration >= 0.9;
-};
+// NOTE: pemberian EXP TIDAK lagi terjadi di sini. EXP sekarang diberikan
+// per blok 5 menit menonton NYATA, dilacak & dipicu langsung dari
+// Watch.jsx (lihat `awardWatchBlockExp` di utils/levels.js) karena hanya
+// komponen player yang tahu apakah video benar-benar sedang diputar.
+// updateWatchProgress() di bawah ini murni untuk fitur "lanjutkan
+// nonton" (menyimpan posisi terakhir), tidak lagi dipakai untuk EXP.
 
 // ───────────────────────── Firestore (logged-in) ─────────────────────────
 
@@ -64,10 +62,6 @@ export const updateWatchProgress = async (uid, episodeId, currentTime, duration)
       duration: Math.floor(duration || 0),
       updatedAt: serverTimestamp(),
     }, { merge: true });
-
-    if (isEpisodeFinished(currentTime, duration)) {
-      awardEpisodeExp(uid, episodeId);
-    }
   } catch {
     // Ignore errors
   }
