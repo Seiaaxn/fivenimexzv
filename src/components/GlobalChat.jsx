@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { watchGlobalChat, sendGlobalChatMessage, deleteGlobalChatMessage } from '../utils/globalChat';
 import { isVerifiedEmail } from '../utils/verified';
 import { isPremiumEmail } from '../utils/premium';
+import { isPremiumRole } from '../utils/roles';
 import { levelProgress } from '../utils/levels';
 import { useLiveUsers, withLiveUser } from '../hooks/useLiveUsers';
 import VerifiedBadge from './VerifiedBadge';
@@ -77,6 +78,7 @@ const GlobalChat = ({ fullPage = false }) => {
         photoURL: profile?.photoURL || user.photoURL || '',
         email: user.email || '',
         level: levelProgress(profile?.exp || 0).level,
+        role: profile?.role || 'user',
         text: body,
         replyTo: replyingTo || null,
       });
@@ -118,7 +120,7 @@ const GlobalChat = ({ fullPage = false }) => {
             )}
             {messages.map((raw) => {
               const m = withLiveUser(raw, liveUsers);
-              const owner = isPremiumEmail(m.email);
+              const owner = isPremiumRole({ role: m.role }, m.email) || isPremiumEmail(m.email);
               return (
               <div key={m.id} className={`global-chat__msg${owner ? ' global-chat__msg--owner' : ''}`}>
                 <Link to={`/u/${m.uid}`} className="global-chat__avatar-link">
@@ -131,7 +133,9 @@ const GlobalChat = ({ fullPage = false }) => {
                       {isVerifiedEmail(m.email) && <VerifiedBadge size={13} />}
                       {owner && <PremiumBadge size={13} />}
                     </Link>
-                    {owner && <span className="global-chat__owner-tag">Pemilik</span>}
+                    {isVerifiedEmail(m.email) && !isPremiumEmail(m.email) ? null : null}
+                    {isPremiumEmail(m.email) && <span className="global-chat__owner-tag">Pemilik</span>}
+                    {owner && !isPremiumEmail(m.email) && <span className="global-chat__owner-tag" style={{ background: 'linear-gradient(135deg,#FFD86B,#F5A524)', color: '#7a4400' }}>Premium</span>}
                     <LevelBadge level={m.level || 1} size="sm" />
                     <span className="global-chat__time">{timeAgo(m.createdAt)}</span>
                   </div>
