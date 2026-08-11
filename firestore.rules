@@ -3,13 +3,73 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // EXP diberikan per blok 5 menit (300 detik) NYATA menonton, lihat
+    // src/utils/levels.js (EXP_PER_WATCH_BLOCK / WATCH_BLOCK_SECONDS).
+    // Nilainya diulang di sini (Firestore Rules tidak bisa import JS) supaya
+    // kenaikan `exp` di dokumen user tetap divalidasi di server walaupun
+    // seseorang mencoba menulis ke Firestore langsung dari console,
+    // melewati kode aplikasi sama sekali.
+    function expClaimAmount() { return 25; }
+    // Jeda minimum ANTAR klaim EXP (sedikit di bawah 300 detik supaya ada
+    // toleransi latensi jaringan). Ini yang membuat exp "tidak bisa
+    // diakalin" biar pun request ditembak manual: berapa pun triknya, naik
+    // exp-nya tetap dibatasi max 1x tiap ~4.5 menit waktu SERVER (bukan
+    // waktu di device pengguna, yang bisa dipalsukan).
+    function minClaimGapSeconds() { return 280; }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Admin: email owner (selalu admin, lihat src/utils/verified.js) ATAU
+    // punya field role == 'admin' di dokumennya sendiri.
+    function isAdmin() {
+      return request.auth != null && (
+        (request.auth.token.email != null &&
+         request.auth.token.email.lower() == 'seiiyvn5@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
     // Profil pengguna: siapa saja bisa baca (untuk menampilkan nama/foto di
     // komentar), tapi hanya pemilik akun yang boleh menulis miliknya sendiri.
     // Foto profil disimpan langsung sebagai field `photoURL` (base64) di sini
     // — tidak memakai Firebase Storage sama sekali.
     match /users/{userId} {
       allow read: if true;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
+
+      allow create: if isOwner(userId)
+                    && request.resource.data.role == 'user'
+                    && request.resource.data.exp == 0
+                    && request.resource.data.level == 1;
+
+      // Admin panel (AdminUsers.jsx) boleh mengubah role/exp/level user
+      // manapun. Pemilik akun sendiri boleh mengubah field profil (nama,
+      // foto, bio, dst) SELAMA TIDAK menyentuh role, dan hanya boleh
+      // menaikkan `exp` miliknya sendiri lewat "klaim blok 5-menit" yang
+      // besarnya persis expClaimAmount() dan berjarak >= minClaimGapSeconds()
+      // dari klaim sebelumnya — bukan ditulis bebas ke angka berapa pun.
+      allow update: if isAdmin()
+                    || (
+                      isOwner(userId)
+                      && request.resource.data.role == resource.data.role
+                      && (
+                        // (a) update profil biasa: exp & level tidak berubah
+                        (request.resource.data.exp == resource.data.exp
+                         && request.resource.data.level == resource.data.level)
+                        ||
+                        // (b) klaim EXP nonton: naik persis sejumlah tetap,
+                        // level naik maksimal 1 tingkat, dan dibatasi jarak
+                        // waktu SERVER dari klaim terakhir.
+                        (request.resource.data.exp == resource.data.exp + expClaimAmount()
+                         && request.resource.data.level >= resource.data.level
+                         && request.resource.data.level <= resource.data.level + 1
+                         && (!('updatedAt' in resource.data)
+                             || request.time > resource.data.updatedAt + duration.value(minClaimGapSeconds(), 's')))
+                      )
+                    );
+
       allow delete: if false;
     }
 
@@ -73,7 +133,11 @@ service cloud.firestore {
                   && (!exists(/databases/$(database)/documents/expLog/$(logId))
                       || resource.data.uid == request.auth.uid);
       allow create: if request.auth != null
-                    && request.auth.uid == request.resource.data.uid;
+                    && request.auth.uid == request.resource.data.uid
+                    && request.resource.data.type in ['watchBlock', 'chapter']
+                    && (request.resource.data.type != 'watchBlock'
+                        || (request.resource.data.blockIndex is int
+                            && request.resource.data.blockIndex >= 0));
       allow update, delete: if false;
     }
 
