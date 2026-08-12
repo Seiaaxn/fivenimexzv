@@ -26,7 +26,7 @@ const BASE_TABS = [
 ];
 
 // Tab "Admin Panel" hanya muncul untuk akun ber-role admin
-// (default: seiiyvn5@gmail.com).
+// (default: ryu694602@gmail.com).
 const ADMIN_TAB = { id: 'admin', label: 'Admin Panel' };
 
 const bookmarkHref = (b) => {
