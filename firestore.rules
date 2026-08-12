@@ -9,11 +9,23 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    // PENTING: setiap kali file ini diubah, HARUS di-deploy ulang supaya
+    // berlaku di server (mis. `firebase deploy --only firestore:rules`).
+    // Kalau tidak, rules lama yang masih aktif bisa menolak admin mengubah
+    // role user lain — di client itu terlihat seperti "role balik lagi ke
+    // yang lama" walau kode aplikasinya sudah benar.
     function isAdmin() {
       return request.auth != null && (
-        request.auth.token.email != null &&
-        request.auth.token.email.lower() == 'ryu694602@gmail.com' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        (request.auth.token.email != null &&
+         request.auth.token.email.lower() == 'ryu694602@gmail.com') ||
+        (
+          // Guard dengan exists() dulu: kalau dokumen users/{uid} milik
+          // admin itu sendiri belum ada, get() di bawah akan error dan
+          // rule evaluation dianggap "deny" — bukan cuma false, jadi
+          // baiknya dicegah eksplisit di sini.
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        )
       );
     }
 
