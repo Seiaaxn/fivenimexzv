@@ -6,13 +6,13 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyB_i-doBTatUCIgZ4TNA5h2vkxN7_ZnO-8',
-  authDomain: 'fivenimexv.firebaseapp.com',
-  projectId: 'fivenimexv',
-  storageBucket: 'fivenimexv.firebasestorage.app',
-  messagingSenderId: '1093657778517',
-  appId: '1:1093657778517:web:33130cf7f68b8d45b637dc',
-  measurementId: 'G-51YCWLFWJL',
+  apiKey: 'AIzaSyBTrY2nQm6hgZdCKT3k-cZ4n-sc4VZJqtQ',
+  authDomain: 'seivyn-nime.firebaseapp.com',
+  projectId: 'seivyn-nime',
+  storageBucket: 'seivyn-nime.firebasestorage.app',
+  messagingSenderId: '933245239088',
+  appId: '1:933245239088:web:b294189c8aada24fe252f5',
+  measurementId: 'G-3QDF8KQ2EZ',
 };
 
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -24,8 +24,6 @@ export const db = getFirestore(firebaseApp);
 // hanya video yang lewat Storage karena ukurannya jauh lebih besar.
 export const storage = getStorage(firebaseApp);
 export const googleProvider = new GoogleAuthProvider();
-// Paksa Google selalu tampilkan pemilih akun (tidak auto-login akun terakhir)
-googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 /**
  * Analytics only works in the browser (needs `window`/`document`).
