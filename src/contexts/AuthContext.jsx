@@ -45,27 +45,6 @@ export const AuthProvider = ({ children }) => {
     return () => unsub();
   }, []);
 
-  // Live-sync profil Firestore — setiap perubahan (termasuk role yang diubah
-  // admin) langsung masuk ke `profile` state dan memicu re-render seluruh app.
-  useEffect(() => {
-    if (typeof window === 'undefined' || !user) {
-      setProfile(null);
-      return;
-    }
-    const userRef = doc(db, 'users', user.uid);
-    const unsub = onSnapshot(userRef, (snap) => {
-      setProfile(snap.exists() ? snap.data() : null);
-    });
-    return () => unsub();
-  }, [user]);
-
-  // isAdmin & isPremium dihitung reaktif dari profil Firestore + email.
-  // Kalau admin ubah role user via AdminPanel → Firestore update →
-  // onSnapshot trigger → profile berubah → isAdmin/isPremium langsung update
-  // → semua komponen yang pakai useAuth() otomatis re-render dengan badge baru.
-  const isAdmin  = useMemo(() => isAdminRole(profile, user?.email),  [profile, user?.email]);
-  const isPremium = useMemo(() => isPremiumRole(profile, user?.email), [profile, user?.email]);
-
   const ensureUserDoc = useCallback(async (u, extra = {}) => {
     const userRef = doc(db, 'users', u.uid);
     const snap = await getDoc(userRef);
@@ -96,10 +75,53 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Live-sync profil Firestore — setiap perubahan (termasuk role yang diubah
+  // admin) langsung masuk ke `profile` state dan memicu re-render seluruh app.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user) {
+      setProfile(null);
+      return;
+    }
+    const userRef = doc(db, 'users', user.uid);
+    const unsub = onSnapshot(userRef, (snap) => {
+      setProfile(snap.exists() ? snap.data() : null);
+      // Self-heal: kalau user sudah login (Firebase Auth) tapi dokumen
+      // Firestore-nya belum/tidak ada — mis. karena penulisan awal sempat
+      // gagal (permission-denied, offline, dll) — coba buat lagi di sini.
+      // Ini jaring pengaman kedua supaya user tidak "hilang" selamanya
+      // dari koleksi users hanya karena satu percobaan write gagal.
+      if (!snap.exists()) {
+        ensureUserDoc(user).catch((err) => {
+          console.error('[AuthContext] Self-heal ensureUserDoc gagal:', err);
+        });
+      }
+    });
+    return () => unsub();
+  }, [user, ensureUserDoc]);
+
+  // isAdmin & isPremium dihitung reaktif dari profil Firestore + email.
+  // Kalau admin ubah role user via AdminPanel → Firestore update →
+  // onSnapshot trigger → profile berubah → isAdmin/isPremium langsung update
+  // → semua komponen yang pakai useAuth() otomatis re-render dengan badge baru.
+  const isAdmin  = useMemo(() => isAdminRole(profile, user?.email),  [profile, user?.email]);
+  const isPremium = useMemo(() => isPremiumRole(profile, user?.email), [profile, user?.email]);
+
   const loginWithGoogle = useCallback(async () => {
     try {
       const res = await signInWithPopup(auth, googleProvider);
-      await ensureUserDoc(res.user);
+      // PENTING: ensureUserDoc TIDAK BOLEH menggagalkan login. Kalau
+      // penulisan dokumen users/{uid} ditolak Firestore Security Rules
+      // (mis. rules belum di-deploy ke server), user tetap harus bisa
+      // masuk — profilnya akan dibuat ulang otomatis nanti (lihat efek
+      // profile listener di bawah). Kalau ini TIDAK di-try/catch terpisah,
+      // dulu seluruh login gagal dan user itu TIDAK PERNAH tercatat di
+      // Firestore sama sekali → makanya panel admin bisa cuma menampilkan
+      // 1 akun (yang doc-nya sempat berhasil dibuat).
+      try {
+        await ensureUserDoc(res.user);
+      } catch (docErr) {
+        console.error('[AuthContext] Gagal membuat/update dokumen users/{uid} saat login:', docErr);
+      }
       return res.user;
     } catch (err) {
       throw new Error(mapAuthError(err));
@@ -110,7 +132,11 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await createUserWithEmailAndPassword(auth, email, password);
       await updateAuthProfile(res.user, { displayName: displayName.trim() || 'Pengguna' });
-      await ensureUserDoc({ ...res.user, displayName: displayName.trim() || 'Pengguna' });
+      try {
+        await ensureUserDoc({ ...res.user, displayName: displayName.trim() || 'Pengguna' });
+      } catch (docErr) {
+        console.error('[AuthContext] Gagal membuat dokumen users/{uid} saat registrasi:', docErr);
+      }
       return res.user;
     } catch (err) {
       throw new Error(mapAuthError(err));
@@ -120,7 +146,11 @@ export const AuthProvider = ({ children }) => {
   const loginWithEmail = useCallback(async (email, password) => {
     try {
       const res = await signInWithEmailAndPassword(auth, email, password);
-      await ensureUserDoc(res.user);
+      try {
+        await ensureUserDoc(res.user);
+      } catch (docErr) {
+        console.error('[AuthContext] Gagal membuat/update dokumen users/{uid} saat login:', docErr);
+      }
       return res.user;
     } catch (err) {
       throw new Error(mapAuthError(err));
