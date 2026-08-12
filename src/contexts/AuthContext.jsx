@@ -1,20 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
-import {
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  signOut,
-  updateProfile as updateAuthProfile,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-} from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut, updateProfile as updateAuthProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { resizeImageToDataUrl } from '../utils/image';
-import { resolveRole, isAdminRole, isPremiumRole, ROLE_USER } from '../utils/roles';
-import { setViewerAccess } from '../utils/accessTier';
 
 const AuthContext = createContext(null);
 
@@ -24,13 +12,6 @@ const mapAuthError = (err) => {
     'auth/popup-closed-by-user': 'Popup login ditutup sebelum selesai.',
     'auth/network-request-failed': 'Koneksi bermasalah, coba lagi.',
     'auth/too-many-requests': 'Terlalu banyak percobaan. Coba lagi nanti.',
-    'auth/email-already-in-use': 'Email ini sudah terdaftar. Coba masuk saja.',
-    'auth/invalid-email': 'Format email tidak valid.',
-    'auth/weak-password': 'Password terlalu lemah, minimal 6 karakter.',
-    'auth/user-not-found': 'Akun dengan email ini tidak ditemukan.',
-    'auth/wrong-password': 'Email atau password salah.',
-    'auth/invalid-credential': 'Email atau password salah.',
-    'auth/missing-password': 'Password wajib diisi.',
   };
   return map[code] || err?.message || 'Terjadi kesalahan. Coba lagi.';
 };
@@ -49,20 +30,6 @@ export const AuthProvider = ({ children }) => {
     });
     return () => unsub();
   }, []);
-
-  // Tangkap hasil redirect Google login (dipakai kalau popup diblokir browser)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result?.user) {
-          await ensureUserDoc(result.user);
-        }
-      })
-      .catch(() => {
-        // Abaikan error redirect (mis. user membatalkan di halaman Google)
-      });
-  }, [ensureUserDoc]);
 
   // Live-sync the Firestore profile document for the current user.
   // This is also where the (base64) profile photo lives — no Firebase
@@ -84,103 +51,26 @@ export const AuthProvider = ({ children }) => {
     const userRef = doc(db, 'users', u.uid);
     const snap = await getDoc(userRef);
     if (!snap.exists()) {
-      // Pertama kali: buat dokumen baru dengan semua field default
       await setDoc(userRef, {
         displayName: u.displayName || extra.displayName || 'Pengguna',
         photoURL: u.photoURL || '',
         email: u.email || '',
-        role: ROLE_USER,
         level: 1,
         exp: 0,
         createdAt: serverTimestamp(),
-        lastLoginAt: serverTimestamp(),
-        loginCount: 1,
       });
-    } else {
-      // Sudah ada: update lastLoginAt + sinkronkan nama/email terbaru dari Auth
-      // (mis. user ganti nama Google, atau email yang baru diverifikasi)
-      const patch = {
-        lastLoginAt: serverTimestamp(),
-        loginCount: (snap.data().loginCount || 0) + 1,
-      };
-      const freshName = u.displayName || extra.displayName;
-      const freshEmail = u.email;
-      // Hanya timpa kalau Auth punya data lebih segar (tidak override edit manual di profil)
-      if (freshEmail && !snap.data().email) patch.email = freshEmail;
-      if (freshName && !snap.data().displayName) patch.displayName = freshName;
-      // Selalu sinkronkan email supaya admin panel tidak tampil kosong
-      if (freshEmail) patch.email = freshEmail;
-      await setDoc(userRef, patch, { merge: true });
     }
   }, []);
 
   const loginWithGoogle = useCallback(async () => {
     try {
-      // Coba popup dulu — lebih nyaman karena tidak perlu redirect halaman
       const res = await signInWithPopup(auth, googleProvider);
       await ensureUserDoc(res.user);
       return res.user;
     } catch (err) {
-      const code = err?.code || '';
-      // Kode-kode ini berarti popup diblokir atau tidak didukung browser/WebView:
-      // popup-closed-by-user    → user menutup popup (bisa jadi popup blocker)
-      // popup-blocked           → browser aktif memblokir popup
-      // cancelled-popup-request → ada request popup lain yang bentrok
-      // operation-not-supported → WebView / browser mobile tidak support popup
-      const shouldRedirect = [
-        'auth/popup-closed-by-user',
-        'auth/popup-blocked',
-        'auth/cancelled-popup-request',
-        'auth/operation-not-supported-in-this-environment',
-      ].includes(code);
-
-      if (shouldRedirect) {
-        // Fallback: redirect ke halaman Google, lalu kembali ke app ini.
-        // Hasilnya ditangkap oleh getRedirectResult di useEffect di atas.
-        await signInWithRedirect(auth, googleProvider);
-        return; // halaman akan redirect, tidak ada return value
-      }
-
       throw new Error(mapAuthError(err));
     }
   }, [ensureUserDoc]);
-
-  /**
-   * Register a new account with email + password, then set the display
-   * name on the Firebase Auth profile before creating the Firestore doc
-   * so `ensureUserDoc` picks up the right name right away.
-   */
-  const registerWithPassword = useCallback(async (email, password, displayName) => {
-    try {
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      if (displayName?.trim()) {
-        await updateAuthProfile(res.user, { displayName: displayName.trim() });
-      }
-      await ensureUserDoc(res.user, { displayName });
-      setUser({ ...res.user });
-      return res.user;
-    } catch (err) {
-      throw new Error(mapAuthError(err));
-    }
-  }, [ensureUserDoc]);
-
-  const loginWithPassword = useCallback(async (email, password) => {
-    try {
-      const res = await signInWithEmailAndPassword(auth, email, password);
-      await ensureUserDoc(res.user);
-      return res.user;
-    } catch (err) {
-      throw new Error(mapAuthError(err));
-    }
-  }, [ensureUserDoc]);
-
-  const resetPassword = useCallback(async (email) => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-    } catch (err) {
-      throw new Error(mapAuthError(err));
-    }
-  }, []);
 
   const logout = useCallback(() => signOut(auth), []);
 
@@ -236,34 +126,16 @@ export const AuthProvider = ({ children }) => {
     return updates;
   }, []);
 
-  const role = resolveRole(profile, user?.email);
-  const isAdmin = isAdminRole(profile, user?.email);
-  const isPremium = isPremiumRole(profile, user?.email);
-
-  // Sinkronkan tier penonton ke module state yang dipakai util anime custom,
-  // supaya fetcher di luar React (Home/Ongoing/Completed/Search) langsung tahu
-  // apakah konten premium boleh ikut ditampilkan.
-  setViewerAccess({ role, canPremium: isPremium, isAdmin });
-
   const value = useMemo(() => ({
     user,
     profile,
     loading,
-    role,
-    isAdmin,
-    isPremium,
     isLoggedIn: !!user,
     loginWithGoogle,
-    registerWithPassword,
-    loginWithPassword,
-    resetPassword,
     logout,
     updateUserProfile,
     updateStatsPrivacy,
-  }), [
-    user, profile, loading, role, isAdmin, isPremium, loginWithGoogle, registerWithPassword, loginWithPassword,
-    resetPassword, logout, updateUserProfile, updateStatsPrivacy,
-  ]);
+  }), [user, profile, loading, loginWithGoogle, logout, updateUserProfile, updateStatsPrivacy]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
