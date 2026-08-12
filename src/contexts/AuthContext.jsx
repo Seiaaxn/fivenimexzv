@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo } 
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   updateProfile as updateAuthProfile,
   createUserWithEmailAndPassword,
@@ -14,6 +16,46 @@ import { resizeImageToDataUrl } from '../utils/image';
 import { isAdminRole, isPremiumRole } from '../utils/roles';
 
 const AuthContext = createContext(null);
+
+/**
+ * Pastikan dokumen `users/{uid}` ada untuk akun yang sedang login.
+ * Dipanggil dari onAuthStateChanged (semua jalur login) + tiap fungsi login.
+ */
+export const ensureUserDocInFirestore = async (u, extra = {}) => {
+  if (!u?.uid) return;
+  const userRef = doc(db, 'users', u.uid);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) {
+    // Dokumen baru: role/exp/level HARUS persis 'user'/0/1 (lihat rule
+    // `allow create` di firestore.rules), field lain bebas.
+    await setDoc(userRef, {
+      displayName: u.displayName || extra.displayName || 'Pengguna',
+      photoURL: u.photoURL || '',
+      email: u.email || '',
+      role: 'user',
+      level: 1,
+      exp: 0,
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+      loginCount: 1,
+    });
+    return;
+  }
+  // User lama login lagi: catat aktivitas login TANPA menyentuh field
+  // role/exp/level sama sekali — supaya tidak pernah bisa "menimpa" role
+  // yang sudah diset admin (lihat firestore.rules).
+  const patch = { lastLoginAt: serverTimestamp(), loginCount: increment(1) };
+  const data = snap.data() || {};
+  // Lengkapi field yang mungkin kosong pada dokumen lama supaya baris user
+  // di admin panel tidak tampil "—" (dan sorting createdAt tetap jalan).
+  if (!data.email && u.email) patch.email = u.email;
+  if (!data.displayName && (u.displayName || extra.displayName)) {
+    patch.displayName = u.displayName || extra.displayName;
+  }
+  if (!data.photoURL && u.photoURL) patch.photoURL = u.photoURL;
+  if (!data.createdAt) patch.createdAt = serverTimestamp();
+  await setDoc(userRef, patch, { merge: true });
+};
 
 const mapAuthError = (err) => {
   const code = err?.code || '';
@@ -31,49 +73,37 @@ const mapAuthError = (err) => {
   return map[code] || err?.message || 'Terjadi kesalahan. Coba lagi.';
 };
 
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ensureUserDoc dipindah ke scope modul (bukan useCallback) supaya bisa
+  // dipakai langsung di dalam listener onAuthStateChanged di bawah — jadi
+  // SETIAP jalur masuk (Google popup, Google redirect, email login, daftar,
+  // atau sesi lama yang otomatis pulih saat reload) selalu memastikan
+  // dokumen users/{uid} ada & lastLoginAt-nya diperbarui. Inilah kunci agar
+  // admin panel ("Pengguna (n)") selalu bertambah otomatis.
+  const ensureUserDoc = ensureUserDocInFirestore;
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // Google login lewat redirect (fallback saat popup diblokir browser /
+    // di dalam iframe): hasilnya baru sampai setelah halaman dimuat ulang.
+    getRedirectResult(auth).catch(() => {});
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
+      if (u) {
+        ensureUserDocInFirestore(u).catch((err) => {
+          console.error('[AuthContext] ensureUserDoc (onAuthStateChanged) gagal:', err);
+        });
+      }
     });
     return () => unsub();
   }, []);
 
-  const ensureUserDoc = useCallback(async (u, extra = {}) => {
-    const userRef = doc(db, 'users', u.uid);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) {
-      // Dokumen baru: role/exp/level HARUS persis 'user'/0/1 (lihat rule
-      // `allow create` di firestore.rules), field lain bebas.
-      await setDoc(userRef, {
-        displayName: u.displayName || extra.displayName || 'Pengguna',
-        photoURL: u.photoURL || '',
-        email: u.email || '',
-        role: 'user',
-        level: 1,
-        exp: 0,
-        createdAt: serverTimestamp(),
-        lastLoginAt: serverTimestamp(),
-        loginCount: 1,
-      });
-    } else {
-      // User lama login lagi: catat aktivitas login TANPA menyentuh field
-      // role/exp/level sama sekali — supaya tidak pernah bisa "menimpa"
-      // role yang sudah diset admin (lihat firestore.rules: update oleh
-      // pemilik dokumen sendiri disyaratkan role tetap sama persis).
-      await setDoc(
-        userRef,
-        { lastLoginAt: serverTimestamp(), loginCount: increment(1) },
-        { merge: true },
-      );
-    }
-  }, []);
 
   // Live-sync profil Firestore — setiap perubahan (termasuk role yang diubah
   // admin) langsung masuk ke `profile` state dan memicu re-render seluruh app.
@@ -109,14 +139,8 @@ export const AuthProvider = ({ children }) => {
   const loginWithGoogle = useCallback(async () => {
     try {
       const res = await signInWithPopup(auth, googleProvider);
-      // PENTING: ensureUserDoc TIDAK BOLEH menggagalkan login. Kalau
-      // penulisan dokumen users/{uid} ditolak Firestore Security Rules
-      // (mis. rules belum di-deploy ke server), user tetap harus bisa
-      // masuk — profilnya akan dibuat ulang otomatis nanti (lihat efek
-      // profile listener di bawah). Kalau ini TIDAK di-try/catch terpisah,
-      // dulu seluruh login gagal dan user itu TIDAK PERNAH tercatat di
-      // Firestore sama sekali → makanya panel admin bisa cuma menampilkan
-      // 1 akun (yang doc-nya sempat berhasil dibuat).
+      // ensureUserDoc TIDAK BOLEH menggagalkan login. onAuthStateChanged
+      // juga sudah memanggilnya, ini hanya supaya dokumen siap lebih cepat.
       try {
         await ensureUserDoc(res.user);
       } catch (docErr) {
@@ -124,9 +148,23 @@ export const AuthProvider = ({ children }) => {
       }
       return res.user;
     } catch (err) {
+      // Popup diblokir browser atau dijalankan di dalam iframe (preview
+      // Lovable / webview) → lanjutkan dengan redirect supaya login Google
+      // tetap bisa selesai. Hasilnya diproses getRedirectResult di atas.
+      const code = err?.code || '';
+      if (
+        code === 'auth/popup-blocked' ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/operation-not-supported-in-this-environment' ||
+        code === 'auth/web-storage-unsupported'
+      ) {
+        await signInWithRedirect(auth, googleProvider);
+        return null;
+      }
       throw new Error(mapAuthError(err));
     }
   }, [ensureUserDoc]);
+
 
   const registerWithEmail = useCallback(async (displayName, email, password) => {
     try {
