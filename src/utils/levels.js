@@ -60,17 +60,31 @@ const awardExp = async (uid, markerId, amount, extra = {}) => {
       if (markerSnap.exists()) return; // sudah pernah dapat EXP untuk marker ini
 
       const userSnap = await tx.get(userRef);
-      const prevExp = userSnap.exists() ? (userSnap.data().exp || 0) : 0;
+      const prevData = userSnap.exists() ? userSnap.data() : {};
+      const prevExp = prevData.exp || 0;
       const newExp = prevExp + amount;
       const newLevel = levelFromExp(newExp);
 
       tx.set(markerRef, { uid, createdAt: serverTimestamp(), ...extra });
-      tx.set(userRef, { exp: newExp, level: newLevel, updatedAt: serverTimestamp() }, { merge: true });
+      // `level` selalu ikut ditulis walau dokumen lama belum punya field
+      // level/exp — firestore.rules membandingkan keduanya, jadi kalau
+      // salah satu tidak ada, update-nya akan ditolak diam-diam.
+      tx.set(
+        userRef,
+        { exp: newExp, level: newLevel, updatedAt: serverTimestamp() },
+        { merge: true },
+      );
     });
-  } catch {
-    // Offline / permission error — abaikan, EXP akan menyusul lain kali.
+    return true;
+  } catch (err) {
+    // Offline / permission error — jangan bikin app crash, tapi JANGAN
+    // ditelan diam-diam: dulu EXP bisa "tidak pernah naik" tanpa jejak
+    // apa pun di console sehingga tidak bisa didiagnosis.
+    console.error('[levels] Gagal memberi EXP:', markerId, err);
+    return false;
   }
 };
+
 
 /**
  * Beri EXP untuk setiap blok 5 menit NYATA menonton anime/donghua.
