@@ -51,14 +51,31 @@ const AdminUsers = () => {
     setUsers((list) => list.map((u) => (u.uid === uid ? { ...u, ...patch } : u)));
 
   const handleRole = async (target, role) => {
+    if (target.isOwner) {
+      // Akun owner (VERIFIED_EMAIL) selalu efektif admin apa pun isi field
+      // role-nya di Firestore — supaya owner tidak bisa mengunci dirinya
+      // sendiri dari luar panel. Karena itu tombol role untuk baris ini
+      // sengaja dinonaktifkan di UI (lihat render di bawah); handler ini
+      // hanya jaga-jaga kalau tombol somehow masih terpanggil.
+      setNotice('');
+      setError('Akun ini adalah pemilik situs — rolenya selalu Admin dan tidak bisa diubah dari sini.');
+      return;
+    }
+
+    const previousRole = target.role;
     setBusyUid(target.uid);
     setError(null);
     setNotice('');
+    // Optimistic update dulu supaya UI langsung terasa responsif...
+    patchLocal(target.uid, { role, storedRole: role });
     try {
       await updateUserRole(target.uid, role);
-      patchLocal(target.uid, { role });
       setNotice(`✅ ${target.displayName} sekarang ${ROLE_LABELS[role]}.`);
     } catch (err) {
+      // ...tapi kalau ternyata gagal/tertolak, kembalikan tampilan ke role
+      // semula SEKALIGUS tampilkan alasannya, jadi tidak terlihat seperti
+      // "diam-diam balik lagi" tanpa penjelasan.
+      patchLocal(target.uid, { role: previousRole, storedRole: previousRole });
       setError(err?.message ?? 'Gagal mengubah role.');
     } finally {
       setBusyUid(null);
@@ -238,7 +255,7 @@ const AdminUsers = () => {
                       <button
                         key={r}
                         type="button"
-                        disabled={busy || u.role === r}
+                        disabled={busy || u.isOwner || u.role === r}
                         className={`admin-toggle-btn ${u.role === r ? 'active' : ''}`}
                         onClick={() => handleRole(u, r)}
                       >
@@ -246,6 +263,11 @@ const AdminUsers = () => {
                       </button>
                     ))}
                   </div>
+                  {u.isOwner && (
+                    <p className="admin-hint" style={{ marginTop: 4 }}>
+                      🔒 Akun pemilik situs — selalu Admin, role tidak bisa diubah dari panel ini.
+                    </p>
+                  )}
 
                   <div className="admin-user__progress">
                     <div className="admin-user__field">
