@@ -6,13 +6,13 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBTrY2nQm6hgZdCKT3k-cZ4n-sc4VZJqtQ',
-  authDomain: 'seivyn-nime.firebaseapp.com',
-  projectId: 'seivyn-nime',
-  storageBucket: 'seivyn-nime.firebasestorage.app',
-  messagingSenderId: '933245239088',
-  appId: '1:933245239088:web:b294189c8aada24fe252f5',
-  measurementId: 'G-3QDF8KQ2EZ',
+  apiKey: 'AIzaSyBiws_zGwg82XfIfp7_vjiiVyfxTjetOtU',
+  authDomain: 'fivenimexc.firebaseapp.com',
+  projectId: 'fivenimexc',
+  storageBucket: 'fivenimexc.firebasestorage.app',
+  messagingSenderId: '565652315470',
+  appId: '1:565652315470:web:b306ca1bb3644052ae121f',
+  measurementId: 'G-R7GPJVXWB1',
 };
 
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
