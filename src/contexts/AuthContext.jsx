@@ -45,6 +45,8 @@ export const AuthProvider = ({ children }) => {
     return () => unsub();
   }, []);
 
+  // Live-sync profil Firestore — setiap perubahan (termasuk role yang diubah
+  // admin) langsung masuk ke `profile` state dan memicu re-render seluruh app.
   useEffect(() => {
     if (typeof window === 'undefined' || !user) {
       setProfile(null);
@@ -57,15 +59,13 @@ export const AuthProvider = ({ children }) => {
     return () => unsub();
   }, [user]);
 
-  // isAdmin & isPremium dihitung dari profil Firestore + email.
-  // Email ryu694602@gmail.com selalu dianggap admin (lihat utils/roles.js).
-  const isAdmin = useMemo(() => isAdminRole(profile, user?.email), [profile, user?.email]);
+  // isAdmin & isPremium dihitung reaktif dari profil Firestore + email.
+  // Kalau admin ubah role user via AdminPanel → Firestore update →
+  // onSnapshot trigger → profile berubah → isAdmin/isPremium langsung update
+  // → semua komponen yang pakai useAuth() otomatis re-render dengan badge baru.
+  const isAdmin  = useMemo(() => isAdminRole(profile, user?.email),  [profile, user?.email]);
   const isPremium = useMemo(() => isPremiumRole(profile, user?.email), [profile, user?.email]);
 
-  /**
-   * Buat dokumen user di Firestore jika belum ada.
-   * Field `role` WAJIB ada saat create — sesuai firestore.rules.
-   */
   const ensureUserDoc = useCallback(async (u, extra = {}) => {
     const userRef = doc(db, 'users', u.uid);
     const snap = await getDoc(userRef);
@@ -149,8 +149,8 @@ export const AuthProvider = ({ children }) => {
       await updateAuthProfile(auth.currentUser, { displayName: updates.displayName });
     }
 
-    // JANGAN sertakan `role` di sini — biarkan merge mempertahankan nilai
-    // existing agar firestore.rules tidak reject update.
+    // JANGAN sertakan `role` di payload — biarkan merge mempertahankan nilai
+    // existing agar firestore.rules tidak reject.
     await setDoc(
       doc(db, 'users', auth.currentUser.uid),
       { ...updates, updatedAt: serverTimestamp() },
