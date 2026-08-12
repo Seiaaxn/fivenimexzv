@@ -11,6 +11,7 @@ import {
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { resizeImageToDataUrl } from '../utils/image';
+import { isAdminRole, isPremiumRole } from '../utils/roles';
 
 const AuthContext = createContext(null);
 
@@ -35,7 +36,6 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Track auth state (client-only)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -45,7 +45,6 @@ export const AuthProvider = ({ children }) => {
     return () => unsub();
   }, []);
 
-  // Live-sync profil Firestore user yang sedang login.
   useEffect(() => {
     if (typeof window === 'undefined' || !user) {
       setProfile(null);
@@ -58,9 +57,14 @@ export const AuthProvider = ({ children }) => {
     return () => unsub();
   }, [user]);
 
+  // isAdmin & isPremium dihitung dari profil Firestore + email.
+  // Email ryu694602@gmail.com selalu dianggap admin (lihat utils/roles.js).
+  const isAdmin = useMemo(() => isAdminRole(profile, user?.email), [profile, user?.email]);
+  const isPremium = useMemo(() => isPremiumRole(profile, user?.email), [profile, user?.email]);
+
   /**
    * Buat dokumen user di Firestore jika belum ada.
-   * PENTING: field `role` HARUS disertakan saat create agar sesuai firestore.rules.
+   * Field `role` WAJIB ada saat create — sesuai firestore.rules.
    */
   const ensureUserDoc = useCallback(async (u, extra = {}) => {
     const userRef = doc(db, 'users', u.uid);
@@ -70,7 +74,7 @@ export const AuthProvider = ({ children }) => {
         displayName: u.displayName || extra.displayName || 'Pengguna',
         photoURL: u.photoURL || '',
         email: u.email || '',
-        role: 'user',      // ← WAJIB ada sesuai firestore.rules allow create
+        role: 'user',
         level: 1,
         exp: 0,
         createdAt: serverTimestamp(),
@@ -78,7 +82,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // ─── LOGIN GOOGLE ────────────────────────────────────────────────────────────
   const loginWithGoogle = useCallback(async () => {
     try {
       const res = await signInWithPopup(auth, googleProvider);
@@ -89,13 +92,10 @@ export const AuthProvider = ({ children }) => {
     }
   }, [ensureUserDoc]);
 
-  // ─── DAFTAR EMAIL/PASSWORD ───────────────────────────────────────────────────
   const registerWithEmail = useCallback(async (displayName, email, password) => {
     try {
       const res = await createUserWithEmailAndPassword(auth, email, password);
-      // Set displayName di Firebase Auth
       await updateAuthProfile(res.user, { displayName: displayName.trim() || 'Pengguna' });
-      // Buat dokumen Firestore (dengan role: 'user' agar rules tidak tolak)
       await ensureUserDoc({ ...res.user, displayName: displayName.trim() || 'Pengguna' });
       return res.user;
     } catch (err) {
@@ -103,7 +103,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, [ensureUserDoc]);
 
-  // ─── LOGIN EMAIL/PASSWORD ────────────────────────────────────────────────────
   const loginWithEmail = useCallback(async (email, password) => {
     try {
       const res = await signInWithEmailAndPassword(auth, email, password);
@@ -114,7 +113,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, [ensureUserDoc]);
 
-  // ─── RESET PASSWORD ──────────────────────────────────────────────────────────
   const resetPassword = useCallback(async (email) => {
     try {
       await sendPasswordResetEmail(auth, email);
@@ -123,10 +121,8 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // ─── LOGOUT ──────────────────────────────────────────────────────────────────
   const logout = useCallback(() => signOut(auth), []);
 
-  // ─── PRIVACY STATS ───────────────────────────────────────────────────────────
   const updateStatsPrivacy = useCallback(async (statsPublic) => {
     if (!auth.currentUser) throw new Error('Kamu belum masuk.');
     await setDoc(
@@ -136,49 +132,30 @@ export const AuthProvider = ({ children }) => {
     );
   }, []);
 
-  /**
-   * Update display name dan/atau foto profil.
-   *
-   * Foto di-resize client-side → base64 JPEG kecil → disimpan di field
-   * `photoURL` dokumen Firestore `users/{uid}`.
-   *
-   * FIX: rules mensyaratkan `role` tidak berubah saat update biasa.
-   * Kita TIDAK menyertakan `role` sama sekali di payload (merge: true),
-   * jadi rules membaca role dari resource.data (dokumen existing) dan
-   * request.resource.data.role == resource.data.role tetap terpenuhi.
-   */
   const updateUserProfile = useCallback(async ({ displayName, photoFile } = {}) => {
     if (!auth.currentUser) throw new Error('Kamu belum masuk.');
-
-    // Pastikan dokumen user sudah ada (bisa terjadi pada user lama)
     await ensureUserDoc(auth.currentUser);
 
     const updates = {};
-
     if (typeof displayName === 'string' && displayName.trim()) {
       updates.displayName = displayName.trim();
     }
-
     if (photoFile) {
       updates.photoURL = await resizeImageToDataUrl(photoFile, 256, 0.72);
     }
-
     if (Object.keys(updates).length === 0) return;
 
-    // Sync displayName ke Firebase Auth (photoURL base64 terlalu panjang untuk Auth)
     if (updates.displayName) {
       await updateAuthProfile(auth.currentUser, { displayName: updates.displayName });
     }
 
-    // Simpan ke Firestore — JANGAN sertakan `role` di sini, biarkan merge
-    // mempertahankan nilai yang sudah ada agar rules tidak reject.
+    // JANGAN sertakan `role` di sini — biarkan merge mempertahankan nilai
+    // existing agar firestore.rules tidak reject update.
     await setDoc(
       doc(db, 'users', auth.currentUser.uid),
       { ...updates, updatedAt: serverTimestamp() },
       { merge: true },
     );
-
-    // Refresh state lokal
     setUser({ ...auth.currentUser });
     return updates;
   }, [ensureUserDoc]);
@@ -188,6 +165,8 @@ export const AuthProvider = ({ children }) => {
     profile,
     loading,
     isLoggedIn: !!user,
+    isAdmin,
+    isPremium,
     loginWithGoogle,
     loginWithEmail,
     registerWithEmail,
@@ -196,7 +175,7 @@ export const AuthProvider = ({ children }) => {
     updateUserProfile,
     updateStatsPrivacy,
   }), [
-    user, profile, loading,
+    user, profile, loading, isAdmin, isPremium,
     loginWithGoogle, loginWithEmail, registerWithEmail, resetPassword,
     logout, updateUserProfile, updateStatsPrivacy,
   ]);
