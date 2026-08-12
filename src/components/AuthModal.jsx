@@ -11,28 +11,15 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// mode: 'login' | 'register' | 'forgot'
 const AuthModal = ({ open, onClose }) => {
-  const { loginWithGoogle, loginWithPassword, registerWithPassword, resetPassword } = useAuth();
-  const [mode, setMode] = useState('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const { loginWithGoogle } = useAuth();
   const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden';
       setError('');
-      setInfo('');
-      setMode('login');
-      setName('');
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
     }
     return () => { document.body.style.overflow = ''; };
   }, [open]);
@@ -40,162 +27,28 @@ const AuthModal = ({ open, onClose }) => {
   if (!open) return null;
 
   const handleGoogle = async () => {
-    setError(''); setInfo(''); setBusy(true);
+    setError(''); setBusy(true);
     try {
-      const result = await loginWithGoogle();
-      // Kalau result undefined berarti sedang redirect ke Google — halaman akan
-      // berpindah sendiri, jadi tidak perlu tutup modal atau tampilkan error.
-      if (result !== undefined) {
-        onClose?.();
-      }
-      // Kalau redirect: biarkan busy=true, halaman akan reload setelah kembali
-    } catch (err) {
-      setError(err.message);
-      setBusy(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(''); setInfo('');
-
-    if (mode === 'forgot') {
-      if (!email.trim()) { setError('Masukkan email kamu terlebih dahulu.'); return; }
-      setBusy(true);
-      try {
-        await resetPassword(email.trim());
-        setInfo('Link reset password sudah dikirim ke email kamu.');
-      } catch (err) {
-        setError(err.message);
-      } finally { setBusy(false); }
-      return;
-    }
-
-    if (!email.trim() || !password) { setError('Email dan password wajib diisi.'); return; }
-
-    if (mode === 'register') {
-      if (!name.trim()) { setError('Nama tampilan wajib diisi.'); return; }
-      if (password.length < 6) { setError('Password minimal 6 karakter.'); return; }
-      if (password !== confirmPassword) { setError('Konfirmasi password tidak sama.'); return; }
-
-      setBusy(true);
-      try {
-        await registerWithPassword(email.trim(), password, name.trim());
-        onClose?.();
-      } catch (err) {
-        setError(err.message);
-      } finally { setBusy(false); }
-      return;
-    }
-
-    // mode === 'login'
-    setBusy(true);
-    try {
-      await loginWithPassword(email.trim(), password);
+      await loginWithGoogle();
       onClose?.();
     } catch (err) {
       setError(err.message);
     } finally { setBusy(false); }
   };
 
-  const titleMap = {
-    login: 'Masuk',
-    register: 'Daftar Akun',
-    forgot: 'Lupa Password',
-  };
-  const descMap = {
-    login: 'Masuk dengan email & password, atau pakai Google.',
-    register: 'Buat akun baru dengan email & password.',
-    forgot: 'Masukkan email kamu, kami kirimkan link reset password.',
-  };
-
   return (
     <div className="auth-modal-overlay" onClick={onClose}>
-      <div className="auth-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={titleMap[mode]}>
+      <div className="auth-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Masuk">
         <button type="button" className="auth-modal-close" onClick={onClose} aria-label="Tutup">×</button>
 
-        <h2 className="auth-google-title">{titleMap[mode]}</h2>
-        <p className="auth-google-desc">{descMap[mode]}</p>
+        <h2 className="auth-google-title">Masuk</h2>
+        <p className="auth-google-desc">Masuk dengan akun Google kamu untuk melanjutkan.</p>
 
         {error && <p className="auth-error">{error}</p>}
-        {info && <p className="auth-info">{info}</p>}
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          {mode === 'register' && (
-            <input
-              type="text"
-              className="auth-input"
-              placeholder="Nama tampilan"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
-            />
-          )}
-
-          <input
-            type="email"
-            className="auth-input"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-
-          {mode !== 'forgot' && (
-            <input
-              type="password"
-              className="auth-input"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-            />
-          )}
-
-          {mode === 'register' && (
-            <input
-              type="password"
-              className="auth-input"
-              placeholder="Konfirmasi password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-          )}
-
-          {mode === 'login' && (
-            <button type="button" className="auth-link-btn" onClick={() => { setError(''); setInfo(''); setMode('forgot'); }}>
-              Lupa password?
-            </button>
-          )}
-
-          <button type="submit" className="auth-submit-btn" disabled={busy}>
-            {busy
-              ? 'Memproses...'
-              : mode === 'login' ? 'Masuk' : mode === 'register' ? 'Daftar' : 'Kirim Link Reset'}
-          </button>
-        </form>
-
-        {mode !== 'forgot' && (
-          <>
-            <div className="auth-divider"><span>atau</span></div>
-            <button type="button" className="auth-google-btn" onClick={handleGoogle} disabled={busy}>
-              <GoogleIcon /> {busy ? 'Mengarahkan ke Google...' : 'Lanjutkan dengan Google'}
-            </button>
-          </>
-        )}
-
-        <p className="auth-switch">
-          {mode === 'login' && (
-            <>Belum punya akun? <button type="button" onClick={() => { setError(''); setInfo(''); setMode('register'); }}>Daftar</button></>
-          )}
-          {mode === 'register' && (
-            <>Sudah punya akun? <button type="button" onClick={() => { setError(''); setInfo(''); setMode('login'); }}>Masuk</button></>
-          )}
-          {mode === 'forgot' && (
-            <>Ingat password? <button type="button" onClick={() => { setError(''); setInfo(''); setMode('login'); }}>Kembali masuk</button></>
-          )}
-        </p>
+        <button type="button" className="auth-google-btn" onClick={handleGoogle} disabled={busy}>
+          <GoogleIcon /> {busy ? 'Memproses...' : 'Lanjutkan dengan Google'}
+        </button>
       </div>
     </div>
   );
