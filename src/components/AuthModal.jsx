@@ -11,21 +11,41 @@ const GoogleIcon = () => (
   </svg>
 );
 
+// Mode: 'login' | 'register' | 'forgot'
 const AuthModal = ({ open, onClose }) => {
-  const { loginWithGoogle } = useAuth();
+  const { loginWithGoogle, loginWithEmail, registerWithEmail, resetPassword } = useAuth();
+  const [mode, setMode] = useState('login');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden';
       setError('');
+      setInfo('');
+      setMode('login');
+      setName('');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
     }
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
   if (!open) return null;
 
+  const switchMode = (m) => {
+    setMode(m);
+    setError('');
+    setInfo('');
+  };
+
+  // ─── Google ──────────────────────────────────────────────────────────────────
   const handleGoogle = async () => {
     setError(''); setBusy(true);
     try {
@@ -36,19 +56,160 @@ const AuthModal = ({ open, onClose }) => {
     } finally { setBusy(false); }
   };
 
+  // ─── Login email/password ────────────────────────────────────────────────────
+  const handleLogin = async () => {
+    if (!email.trim() || !password) { setError('Isi email dan password.'); return; }
+    setError(''); setBusy(true);
+    try {
+      await loginWithEmail(email.trim(), password);
+      onClose?.();
+    } catch (err) {
+      setError(err.message);
+    } finally { setBusy(false); }
+  };
+
+  // ─── Daftar ──────────────────────────────────────────────────────────────────
+  const handleRegister = async () => {
+    if (!name.trim()) { setError('Isi nama kamu.'); return; }
+    if (!email.trim()) { setError('Isi email.'); return; }
+    if (password.length < 6) { setError('Password minimal 6 karakter.'); return; }
+    if (password !== confirmPassword) { setError('Konfirmasi password tidak cocok.'); return; }
+    setError(''); setBusy(true);
+    try {
+      await registerWithEmail(name.trim(), email.trim(), password);
+      onClose?.();
+    } catch (err) {
+      setError(err.message);
+    } finally { setBusy(false); }
+  };
+
+  // ─── Lupa password ───────────────────────────────────────────────────────────
+  const handleForgot = async () => {
+    if (!email.trim()) { setError('Isi email kamu.'); return; }
+    setError(''); setInfo(''); setBusy(true);
+    try {
+      await resetPassword(email.trim());
+      setInfo('Link reset password sudah dikirim ke email kamu.');
+    } catch (err) {
+      setError(err.message);
+    } finally { setBusy(false); }
+  };
+
+  const title = mode === 'login' ? 'Masuk' : mode === 'register' ? 'Daftar' : 'Reset Password';
+
   return (
     <div className="auth-modal-overlay" onClick={onClose}>
-      <div className="auth-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Masuk">
+      <div
+        className="auth-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         <button type="button" className="auth-modal-close" onClick={onClose} aria-label="Tutup">×</button>
 
-        <h2 className="auth-google-title">Masuk</h2>
-        <p className="auth-google-desc">Masuk dengan akun Google kamu untuk melanjutkan.</p>
+        <h2 className="auth-google-title">{title}</h2>
 
         {error && <p className="auth-error">{error}</p>}
+        {info  && <p className="auth-info">{info}</p>}
 
-        <button type="button" className="auth-google-btn" onClick={handleGoogle} disabled={busy}>
-          <GoogleIcon /> {busy ? 'Memproses...' : 'Lanjutkan dengan Google'}
-        </button>
+        {/* ── FORM ── */}
+        <div className="auth-form">
+
+          {/* Nama — hanya di mode register */}
+          {mode === 'register' && (
+            <input
+              className="auth-input"
+              type="text"
+              placeholder="Nama Pengguna"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={40}
+              autoComplete="name"
+            />
+          )}
+
+          {/* Email — semua mode */}
+          <input
+            className="auth-input"
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+          />
+
+          {/* Password — login + register */}
+          {mode !== 'forgot' && (
+            <input
+              className="auth-input"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+            />
+          )}
+
+          {/* Konfirmasi password — register saja */}
+          {mode === 'register' && (
+            <input
+              className="auth-input"
+              type="password"
+              placeholder="Konfirmasi Password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          )}
+
+          {/* Lupa password link — hanya di login */}
+          {mode === 'login' && (
+            <button type="button" className="auth-link-btn" onClick={() => switchMode('forgot')}>
+              Lupa password?
+            </button>
+          )}
+
+          {/* Tombol aksi utama */}
+          {mode === 'login' && (
+            <button type="button" className="auth-submit-btn" onClick={handleLogin} disabled={busy}>
+              {busy ? 'Memproses...' : 'Masuk'}
+            </button>
+          )}
+          {mode === 'register' && (
+            <button type="button" className="auth-submit-btn" onClick={handleRegister} disabled={busy}>
+              {busy ? 'Mendaftar...' : 'Daftar'}
+            </button>
+          )}
+          {mode === 'forgot' && (
+            <button type="button" className="auth-submit-btn" onClick={handleForgot} disabled={busy}>
+              {busy ? 'Mengirim...' : 'Kirim Link Reset'}
+            </button>
+          )}
+        </div>
+
+        {/* Divider Google — hanya login & register */}
+        {mode !== 'forgot' && (
+          <>
+            <div className="auth-divider"><span>atau</span></div>
+            <button type="button" className="auth-google-btn" onClick={handleGoogle} disabled={busy}>
+              <GoogleIcon /> {busy ? 'Memproses...' : 'Lanjutkan dengan Google'}
+            </button>
+          </>
+        )}
+
+        {/* Switch mode */}
+        <p className="auth-switch">
+          {mode === 'login' && (
+            <>Belum punya akun?<button type="button" onClick={() => switchMode('register')}>Daftar</button></>
+          )}
+          {mode === 'register' && (
+            <>Sudah punya akun?<button type="button" onClick={() => switchMode('login')}>Masuk</button></>
+          )}
+          {mode === 'forgot' && (
+            <>Ingat password?<button type="button" onClick={() => switchMode('login')}>Masuk</button></>
+          )}
+        </p>
       </div>
     </div>
   );
