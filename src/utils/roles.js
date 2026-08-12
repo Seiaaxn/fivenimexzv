@@ -104,14 +104,24 @@ export const listUsers = async (max = 500) => {
  * @param {number}   max       Batas dokumen (default 500)
  * @returns {function}         Fungsi unsubscribe
  */
-export const watchUsers = (callback, max = 500) => {
+export const watchUsers = (callback, max = 500, onError) => {
   const q = query(collection(db, 'users'), fbLimit(max));
   return onSnapshot(
     q,
+    { includeMetadataChanges: false },
     (snap) => callback(sortByCreatedAtDesc(snap.docs.map(normalizeUser))),
-    () => callback([]),
+    (err) => {
+      // Jangan kosongkan daftar (dulu ini membuat "Pengguna (0)" tanpa
+      // penjelasan). Laporkan errornya, lalu coba sekali lewat getDocs.
+      console.error('[roles] watchUsers error:', err);
+      onError?.(err);
+      listUsers(max)
+        .then((list) => callback(list))
+        .catch(() => {});
+    },
   );
 };
+
 
 /**
  * Ubah role seorang user (hanya dipanggil dari admin panel).
