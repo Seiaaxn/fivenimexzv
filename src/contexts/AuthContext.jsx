@@ -8,7 +8,7 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 import { resizeImageToDataUrl } from '../utils/image';
 import { isAdminRole, isPremiumRole } from '../utils/roles';
@@ -70,6 +70,8 @@ export const AuthProvider = ({ children }) => {
     const userRef = doc(db, 'users', u.uid);
     const snap = await getDoc(userRef);
     if (!snap.exists()) {
+      // Dokumen baru: role/exp/level HARUS persis 'user'/0/1 (lihat rule
+      // `allow create` di firestore.rules), field lain bebas.
       await setDoc(userRef, {
         displayName: u.displayName || extra.displayName || 'Pengguna',
         photoURL: u.photoURL || '',
@@ -78,7 +80,19 @@ export const AuthProvider = ({ children }) => {
         level: 1,
         exp: 0,
         createdAt: serverTimestamp(),
+        lastLoginAt: serverTimestamp(),
+        loginCount: 1,
       });
+    } else {
+      // User lama login lagi: catat aktivitas login TANPA menyentuh field
+      // role/exp/level sama sekali — supaya tidak pernah bisa "menimpa"
+      // role yang sudah diset admin (lihat firestore.rules: update oleh
+      // pemilik dokumen sendiri disyaratkan role tetap sama persis).
+      await setDoc(
+        userRef,
+        { lastLoginAt: serverTimestamp(), loginCount: increment(1) },
+        { merge: true },
+      );
     }
   }, []);
 
