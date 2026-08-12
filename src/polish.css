@@ -872,3 +872,59 @@ a:hover { color: var(--color-primary-light); }
   background: linear-gradient(90deg, #f7b733, #fc4a1a);
   color: #fff;
     }
+
+/* ─── Tombol mundur/maju 10 detik di halaman watch (gaya YouTube) ─── */
+.watch-seek-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.watch-seek-btn:hover,
+.watch-seek-btn:focus-visible {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.75);
+}
+.watch-seek-btn:active { transform: translateY(-50%) scale(0.92); }
+.watch-seek-btn--back { left: 10px; }
+.watch-seek-btn--fwd { right: 10px; }
+
+.watch-seek-hint {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 7;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  pointer-events: none;
+  animation: watch-seek-hint-fade 0.7s ease-out forwards;
+}
+.watch-seek-hint--back { left: 18%; }
+.watch-seek-hint--fwd { right: 18%; }
+
+@keyframes watch-seek-hint-fade {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (max-width: 600px) {
+  .watch-seek-btn { padding: 6px 8px; font-size: 0.62rem; }
+                  }
