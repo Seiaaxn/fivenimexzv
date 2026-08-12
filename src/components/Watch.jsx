@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { ClientOnly } from '@tanstack/react-router';
 import { useParams, Link, useNavigate, useLocation } from '@/lib/router-compat';
 import { animeAPI } from '../services/api';
 import { addToWatchHistory, updateWatchProgress, getWatchProgress } from '../utils/watchHistory';
@@ -678,29 +679,42 @@ const Watch = () => {
         )}
         {videoUrl? (
           useVideoJs? (
-            <Player.Provider key={videoUrl}>
-              <VideoSkin>
-                <Video
-                  ref={(el) => {
-                    const prev = videoElRef.current;
-                    videoElRef.current = el;
-                    if (el && el !== prev) {
-                      el.onerror = () => {
-                        devLog('[Watch] Video.js failed, falling back to iframe');
-                        setVideoFailed(true);
-                        setSwitching(false);
-                      };
-                      // Trigger ulang EXP effect setelah video element benar-benar ada
-                      setVideoReady((n) => n + 1);
-                    }
-                  }}
-                  src={videoUrl}
-                  playsInline
-                  autoPlay
-                  preload="auto"
-                />
-              </VideoSkin>
-            </Player.Provider>
+            // Video.js (@videojs/react) relies on Custom Elements / DOM APIs
+            // that don't exist during SSR. Rendering it on the server throws
+            // and gets caught by the root ErrorBoundary ("Ada yang Salah") on
+            // every single /watch page load. ClientOnly defers this subtree
+            // to the browser only, showing `fallback` during SSR/hydration.
+            <ClientOnly
+              fallback={
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                  <div className="spinner" />
+                </div>
+              }
+            >
+              <Player.Provider key={videoUrl}>
+                <VideoSkin>
+                  <Video
+                    ref={(el) => {
+                      const prev = videoElRef.current;
+                      videoElRef.current = el;
+                      if (el && el !== prev) {
+                        el.onerror = () => {
+                          devLog('[Watch] Video.js failed, falling back to iframe');
+                          setVideoFailed(true);
+                          setSwitching(false);
+                        };
+                        // Trigger ulang EXP effect setelah video element benar-benar ada
+                        setVideoReady((n) => n + 1);
+                      }
+                    }}
+                    src={videoUrl}
+                    playsInline
+                    autoPlay
+                    preload="auto"
+                  />
+                </VideoSkin>
+              </Player.Provider>
+            </ClientOnly>
           ) : iframeSrc? (
             <EmbedPlayer src={iframeSrc} title={episodeData.title} onLoad={() => setSwitching(false)} />
           ) : (
