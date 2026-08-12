@@ -29,12 +29,24 @@ const AdminUsers = () => {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const unsub = watchUsers((list) => {
-      setUsers(list);
-      setLoading(false);
-    });
+    const unsub = watchUsers(
+      (list) => {
+        setUsers(list);
+        setLoading(false);
+      },
+      500,
+      (err) => {
+        setLoading(false);
+        setError(
+          err?.code === 'permission-denied'
+            ? 'Firestore menolak membaca koleksi users. Pastikan firestore.rules terbaru sudah di-deploy.'
+            : 'Koneksi realtime ke daftar pengguna terganggu, memakai data terakhir.',
+        );
+      },
+    );
     return () => unsub();
   }, []);
+
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase();
