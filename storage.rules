@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Catatan: proyek ini menyimpan foto profil sebagai base64 di Firestore,
+// BUKAN di Firebase Storage. Storage dipakai hanya untuk upload video episode
+// custom (customAnime) oleh admin. Rules ini melindungi bucket tersebut.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Folder video episode — hanya admin (pemilik) yang boleh upload/hapus.
+    // Semua orang boleh baca (streaming publik).
+    match /episodes/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.token.email != null
+                   && request.auth.token.email.lower() == 'ryu694602@gmail.com';
+    }
+
+    // Folder foto profil — OPSIONAL (saat ini foto profil disimpan di Firestore
+    // sebagai base64). Aktifkan bagian ini jika nanti ingin pindah ke Storage.
+    //
+    // match /avatars/{uid}/{fileName} {
+    //   allow read: if true;
+    //   allow write: if request.auth != null
+    //                && request.auth.uid == uid
+    //                && request.resource.size < 2 * 1024 * 1024   // max 2 MB
+    //                && request.resource.contentType.matches('image/.*');
+    // }
+
+    // Blokir semua akses lain.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
