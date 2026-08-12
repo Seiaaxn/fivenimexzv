@@ -483,68 +483,6 @@ const Watch = () => {
     };
   }, [videoUrl]);
 
-  // ─── EXP untuk pemutar embed/iframe (fallback) ───
-  // Kalau video native gagal dan kita jatuh ke <iframe>, kita tidak punya
-  // akses ke event `timeupdate` sehingga EXP dulu TIDAK PERNAH naik pada
-  // episode-episode yang memakai server embed. Di sini waktu nonton dihitung
-  // dari jam nyata, hanya bertambah selagi tab benar-benar terlihat, jadi
-  // menonton di server mana pun tetap menaikkan EXP.
-  useEffect(() => {
-    if (!uid || !episodeId || !videoFailed || !videoUrl) return;
-
-    const tick = () => {
-      if (document.visibilityState !== 'visible') return;
-      watchedSecondsRef.current += 1;
-      const completedBlocks = Math.floor(watchedSecondsRef.current / WATCH_BLOCK_SECONDS);
-      for (let b = 0; b < completedBlocks; b++) {
-        if (awardedBlocksRef.current.has(b)) continue;
-        awardedBlocksRef.current.add(b);
-        awardWatchBlockExp(uid, episodeId, b);
-        setExpToast({ exp: EXP_PER_WATCH_BLOCK, key: `${episodeId}-${b}-${Date.now()}` });
-      }
-    };
-
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [uid, episodeId, videoFailed, videoUrl]);
-
-  // ─── Mundur / maju 10 detik (seperti YouTube) ───
-  const [seekHint, setSeekHint] = useState(null); // { dir, key } | null
-
-  const seekBy = useCallback((delta) => {
-    const vid = videoElRef.current;
-    if (!vid) return;
-    const duration = Number.isFinite(vid.duration) && vid.duration > 0 ? vid.duration : null;
-    const next = vid.currentTime + delta;
-    vid.currentTime = Math.max(0, duration ? Math.min(duration - 0.5, next) : next);
-    setSeekHint({ dir: delta > 0 ? 'forward' : 'backward', key: Date.now() });
-  }, []);
-
-  useEffect(() => {
-    if (!seekHint) return;
-    const t = setTimeout(() => setSeekHint(null), 700);
-    return () => clearTimeout(t);
-  }, [seekHint]);
-
-  // Shortcut keyboard: ← / → = 10 detik, spasi/K = play-pause.
-  useEffect(() => {
-    const onKey = (e) => {
-      const tag = e.target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
-      const vid = videoElRef.current;
-      if (!vid) return;
-      if (e.key === 'ArrowRight') { e.preventDefault(); seekBy(10); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); seekBy(-10); }
-      else if (e.key === ' ' || e.key.toLowerCase?.() === 'k') {
-        e.preventDefault();
-        if (vid.paused) vid.play?.().catch(() => {}); else vid.pause?.();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [seekBy]);
-
-
   // ─── Anti-ads ───
   useEffect(() => {
     const adP = ['doubleclick.net', 'googlesyndication.com', 'popads.net', 'popcash.net', 'adsterra.com', 'exoclick.com'];
@@ -711,59 +649,7 @@ const Watch = () => {
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><div className="spinner" /></div>
         )}
-
-        {/* Kontrol mundur/maju 10 detik (gaya YouTube) — hanya untuk pemutar
-            native. Zona ketuk-ganda tidak menutupi bar kontrol di bawah. */}
-        {useVideoJs && videoUrl && !switching && (
-          <>
-            <div
-              onDoubleClick={() => seekBy(-10)}
-              style={{ position: 'absolute', left: 0, top: 0, bottom: 64, width: '30%', zIndex: 4 }}
-              aria-hidden
-            />
-            <div
-              onDoubleClick={() => seekBy(10)}
-              style={{ position: 'absolute', right: 0, top: 0, bottom: 64, width: '30%', zIndex: 4 }}
-              aria-hidden
-            />
-
-            <button
-              type="button"
-              aria-label="Mundur 10 detik"
-              onClick={() => seekBy(-10)}
-              className="watch-seek-btn watch-seek-btn--back"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="11 17 6 12 11 7" /><polyline points="18 17 13 12 18 7" />
-              </svg>
-              <span>10</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Maju 10 detik"
-              onClick={() => seekBy(10)}
-              className="watch-seek-btn watch-seek-btn--fwd"
-            >
-              <span>10</span>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="13 17 18 12 13 7" /><polyline points="6 17 11 12 6 7" />
-              </svg>
-            </button>
-
-            {seekHint && (
-              <div
-                key={seekHint.key}
-                className={`watch-seek-hint ${seekHint.dir === 'forward' ? 'watch-seek-hint--fwd' : 'watch-seek-hint--back'}`}
-                role="status"
-                aria-live="polite"
-              >
-                {seekHint.dir === 'forward' ? '+10 detik' : '−10 detik'}
-              </div>
-            )}
-          </>
-        )}
       </div>
-
 
       {/* Quality & Server */}
       <div className="server-selector">
