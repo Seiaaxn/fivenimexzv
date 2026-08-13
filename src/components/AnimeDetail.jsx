@@ -476,7 +476,12 @@ const AnimeDetail = () => {
                       <Link
                         to={`/watch/${episode.episodeId}`}
                         className="dd-ep-btn"
-                        state={{ provider: providerUsed }}
+                        state={{
+                          provider: providerUsed,
+                          animeTitle: title,
+                          animeSlug: anime.slug ?? anime.animeId ?? animeId,
+                          episodeNumber: Number(episode.episode) || idx + 1,
+                        }}
                         aria-label={`Tonton ${epLabel(episode, idx)}`}
                       >
                         <span className="dd-ep-btn__title">{epLabel(episode, idx)}</span>
