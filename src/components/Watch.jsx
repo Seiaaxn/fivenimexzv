@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from '@/lib/router-compat';
-import { animeAPI } from '../services/api';
+import { animeAPI, deriveEpisodeHint } from '../services/api';
 import { addToWatchHistory, updateWatchProgress, getWatchProgress } from '../utils/watchHistory';
 import { awardWatchBlockExp, WATCH_BLOCK_SECONDS, EXP_PER_WATCH_BLOCK } from '../utils/levels';
 import { useAuth } from '../contexts/AuthContext';
@@ -210,6 +210,25 @@ const Watch = () => {
               data = result; usedProvider = p.name; break;
             }
           } catch (e) { lastError = e; }
+        }
+        if (cancelled) return;
+
+        // ─── Fallback terakhir: cari episode yang sama di provider lain ───
+        // Provider seperti Alqanime/Nimegami punya daftar episode tapi tidak
+        // punya endpoint streaming per-episode, jadi episodeId-nya tidak
+        // dikenal endpoint mana pun. Di sini judul + nomor episode dipakai
+        // untuk mencari sumber streaming pengganti, sehingga daftar episode
+        // dari SEMUA endpoint tetap bisa diputar di halaman watch.
+        if (!data) {
+          const hint = deriveEpisodeHint(episodeId) || {};
+          const resolved = await animeAPI.resolveEpisodeFallback({
+            animeTitle: location.state?.animeTitle || hint.animeTitle,
+            animeSlug: location.state?.animeSlug || hint.animeSlug,
+            episodeNumber: location.state?.episodeNumber || hint.episodeNumber,
+            exclude: [],
+          }).catch(() => null);
+          if (cancelled) return;
+          if (resolved?.data) { data = resolved.data; usedProvider = resolved.provider; }
         }
         if (cancelled) return;
         if (!data) throw new Error(lastError?.message || 'Episode tidak ditemukan.');
