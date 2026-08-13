@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from '@/lib/router-compat';
 import { animeAPI, deriveEpisodeHint } from '../services/api';
+import { parseSankaEpisodeId } from '../services/sankaProviders';
 import { addToWatchHistory, updateWatchProgress, getWatchProgress } from '../utils/watchHistory';
-import { awardWatchBlockExp, WATCH_BLOCK_SECONDS, EXP_PER_WATCH_BLOCK } from '../utils/levels';
 import { useAuth } from '../contexts/AuthContext';
 import { createPlayer } from '@videojs/react';
 import { VideoSkin, Video, videoFeatures } from '@videojs/react/video';
@@ -36,7 +36,7 @@ const Watch = () => {
   const [videoFailed, setVideoFailed] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [buffering, setBuffering] = useState(false);
-  const [videoReady, setVideoReady] = useState(0); // trigger EXP effect ketika video element tersedia
+  const [videoReady, setVideoReady] = useState(0); // trigger effect ketika video element tersedia
   const videoElRef = useRef(null);
   const saveTimerRef = useRef(null);
   const savedTimeRef = useRef(0);
@@ -69,18 +69,6 @@ const Watch = () => {
   useEffect(() => {
     uidRef.current = uid;
   }, [uid]);
-
-  // ─── EXP: akumulasi waktu nonton NYATA (anti-cheat) ───
-  // `watchedSecondsRef` hanya bertambah lewat event `timeupdate` ketika video
-  // benar-benar sedang diputar, tab terlihat (bukan background), dan lompatan
-  // waktunya wajar (bukan hasil seek/skip atau memanipulasi playbackRate).
-  // Kalau seseorang cuma membuka tab lalu diam, atau nge-seek maju, atau
-  // memanggil fungsi Firestore langsung dari console, angka ini TIDAK ikut
-  // bertambah — jadi tidak bisa dipakai untuk minta EXP secara curang.
-  const watchedSecondsRef = useRef(0);
-  const lastTimeUpdateRef = useRef(null); // { videoTime, wallTime }
-  const awardedBlocksRef = useRef(new Set());
-  const [expToast, setExpToast] = useState(null); // { exp, level } | null
 
   // If Firebase Auth hasn't finished resolving the session yet when this
   // page first loads (common right after a refresh), the very first
@@ -124,13 +112,6 @@ const Watch = () => {
     setVideoFailed(false);
     setSwitching(false);
     historyItemRef.current = null;
-
-    // Reset akumulasi waktu nonton nyata setiap ganti episode, supaya EXP
-    // selalu dihitung dari nol per episode (tidak bisa "bawa" akumulasi
-    // dari episode lain).
-    watchedSecondsRef.current = 0;
-    lastTimeUpdateRef.current = null;
-    awardedBlocksRef.current = new Set();
 
     const fetchEpisodeData = async () => {
       try {
@@ -178,9 +159,16 @@ const Watch = () => {
         }
 
         const stateProvider = location.state?.provider;
-        const isNimegamiEp = String(episodeId).includes('$$');
-        const allProviders = isNimegamiEp
-          ? [{ fn: () => animeAPI.getEpisodeDetailNimegami(episodeId), name: 'nimegami' }]
+        // Episode sintetis "<provider>$$<slug>$$<nomor>" (Nimegami / Alqanime).
+        // Provider-nya sudah pasti dari id-nya, jadi langsung panggil endpoint
+        // provider tersebut tanpa menebak-nebak provider lain.
+        const syntheticEp = parseSankaEpisodeId(episodeId);
+        const allProviders = syntheticEp
+          ? [
+              syntheticEp.provider === 'alqanime'
+                ? { fn: () => animeAPI.getEpisodeDetailAlqanime(episodeId), name: 'alqanime' }
+                : { fn: () => animeAPI.getEpisodeDetailNimegami(episodeId), name: 'nimegami' },
+            ]
           : [
               { fn: () => animeAPI.getDonghuaEpisode(episodeId), name: 'donghua' },
               { fn: () => animeAPI.getEpisodeDetailSamehadaku(episodeId), name: 'samehadaku' },
@@ -188,6 +176,7 @@ const Watch = () => {
               { fn: () => animeAPI.getEpisodeDetailAnoboy(episodeId), name: 'anoboy' },
               { fn: () => animeAPI.getEpisodeDetailOploverz(episodeId), name: 'oploverz' },
               { fn: () => animeAPI.getEpisodeDetailStream(episodeId), name: 'stream' },
+              { fn: () => animeAPI.getEpisodeDetailAlqanime(episodeId), name: 'alqanime' },
               { fn: () => animeAPI.getEpisodeDetailNaid(episodeId), name: 'nontonanimeid' },
             ];
 
@@ -280,16 +269,33 @@ const Watch = () => {
         if (cancelled) return;
 
         if (normalized?.animeId) {
-          try {
-            const animeRes = await animeAPI.getAnimeDetail(normalized.animeId);
-            if (cancelled) return;
-            setAnimeData(animeRes?.data || null);
-            const historyItem = { animeId: animeRes?.data?.animeId || normalized.animeId, episodeId, animeTitle: animeRes?.data?.title || normalized.title || episodeId, episodeTitle: normalized.title || episodeId, poster: animeRes?.data?.poster || animeRes?.data?.poster_url || '', provider: usedProvider || 'otakudesu' };
-            historyItemRef.current = historyItem;
-            addToWatchHistory(uidRef.current, historyItem);
-          } catch {
-            // Ignore history save errors
-          }
+          // Ambil detail anime dari provider yang SAMA dengan sumber episode.
+          // Dulu selalu memakai getAnimeDetail (otakudesu), sehingga episode
+          // dari alqanime/nimegami/stream gagal memuat detail dan riwayat
+          // tontonnya tidak pernah tersimpan.
+          const detailByProvider = {
+            alqanime: (id) => animeAPI.getAnimeDetailAlqanime(id),
+            nimegami: (id) => animeAPI.getAnimeDetailNimegami(id),
+            stream: (id) => animeAPI.getAnimeDetailStream(id),
+            samehadaku: (id) => animeAPI.getAnimeDetailSamehadaku(id),
+            anoboy: (id) => animeAPI.getAnimeDetailAnoboy(id),
+            oploverz: (id) => animeAPI.getAnimeDetailOploverz(id),
+          };
+          const fetchDetail = detailByProvider[usedProvider] || ((id) => animeAPI.getAnimeDetail(id));
+          const animeRes = await fetchDetail(normalized.animeId).catch(() => null);
+          if (cancelled) return;
+          if (animeRes?.data) setAnimeData(animeRes.data);
+          const historyItem = {
+            animeId: animeRes?.data?.animeId || normalized.animeId,
+            episodeId,
+            animeTitle:
+              animeRes?.data?.title || location.state?.animeTitle || normalized.title || episodeId,
+            episodeTitle: normalized.title || episodeId,
+            poster: animeRes?.data?.poster || animeRes?.data?.poster_url || normalized.poster || '',
+            provider: usedProvider || 'otakudesu',
+          };
+          historyItemRef.current = historyItem;
+          addToWatchHistory(uidRef.current, historyItem);
         }
       } catch (err) {
         if (!cancelled) setError(err?.message?? String(err));
@@ -329,48 +335,6 @@ const Watch = () => {
     };
     const onEnded = () => {
       if (vid.currentTime > 5) updateWatchProgress(uid, episodeId, vid.currentTime, vid.duration);
-    };
-
-    // ─── EXP anti-cheat: hanya hitung waktu yang BENAR-BENAR berjalan ───
-    // Setiap `timeupdate` (native, ±250ms saat playing), bandingkan selisih
-    // waktu video dengan selisih waktu jam sungguhan (performance.now()).
-    // Kalau keduanya cocok (video maju secara wajar, bukan lompat karena
-    // seek, dan tab sedang aktif), baru dihitung sebagai detik nonton
-    // nyata. Ini membuat trik umum (seek ke akhir, tab disembunyikan,
-    // playbackRate dipercepat, atau memanggil awardWatchBlockExp langsung
-    // dari console) tidak menghasilkan EXP — karena akumulasinya cuma naik
-    // lewat pola play yang wajar, dan pemberian EXP-nya sendiri masih
-    // divalidasi ulang di firestore.rules (rate-limit + jumlah exp tetap).
-    const onTimeUpdate = () => {
-      const now = performance.now() / 1000;
-      const videoTime = vid.currentTime;
-      const prev = lastTimeUpdateRef.current;
-      lastTimeUpdateRef.current = { videoTime, wallTime: now };
-
-      if (!prev || vid.paused || vid.seeking || document.visibilityState !== 'visible') return;
-
-      const wallDelta = now - prev.wallTime;
-      const videoDelta = videoTime - prev.videoTime;
-      // Wajar: video maju kira-kira sebesar waktu jam yang lewat (toleransi
-      // buffering kecil), dan tidak dalam lompatan besar (seek).
-      const isPlausiblePlayback =
-        wallDelta > 0 && wallDelta < 2 &&
-        videoDelta > 0 && Math.abs(videoDelta - wallDelta) < 1.5;
-
-      if (!isPlausiblePlayback) return;
-
-      watchedSecondsRef.current += Math.min(wallDelta, videoDelta);
-
-      const completedBlocks = Math.floor(watchedSecondsRef.current / WATCH_BLOCK_SECONDS);
-      if (completedBlocks > 0 && uid) {
-        for (let b = 0; b < completedBlocks; b++) {
-          if (!awardedBlocksRef.current.has(b)) {
-            awardedBlocksRef.current.add(b);
-            awardWatchBlockExp(uid, episodeId, b);
-            setExpToast({ exp: EXP_PER_WATCH_BLOCK, key: `${episodeId}-${b}-${Date.now()}` });
-          }
-        }
-      }
     };
 
     const onError = () => {
@@ -415,10 +379,6 @@ const Watch = () => {
       if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
     };
 
-    // Tab disembunyikan/kembali terlihat: buang sampel waktu terakhir supaya
-    // jeda saat di background tidak ikut terhitung sebagai nonton nyata.
-    const onVisibilityChange = () => { lastTimeUpdateRef.current = null; };
-
     vid.addEventListener('loadeddata', onLoaded);
     vid.addEventListener('pause', onPause);
     vid.addEventListener('play', onPlay);
@@ -426,9 +386,6 @@ const Watch = () => {
     vid.addEventListener('error', onError);
     vid.addEventListener('stalled', onStalled);
     vid.addEventListener('playing', onPlaying);
-    vid.addEventListener('timeupdate', onTimeUpdate);
-    vid.addEventListener('seeking', onVisibilityChange);
-    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
       vid.removeEventListener('loadeddata', onLoaded);
@@ -438,21 +395,11 @@ const Watch = () => {
       vid.removeEventListener('error', onError);
       vid.removeEventListener('stalled', onStalled);
       vid.removeEventListener('playing', onPlaying);
-      vid.removeEventListener('timeupdate', onTimeUpdate);
-      vid.removeEventListener('seeking', onVisibilityChange);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (saveTimerRef.current) { clearInterval(saveTimerRef.current); saveTimerRef.current = null; }
       if (stallTimer) clearTimeout(stallTimer);
       cancelled = true;
     };
   }, [videoUrl, episodeId, uid, videoReady]);
-
-  // Toast "+25 EXP" otomatis hilang setelah beberapa detik.
-  useEffect(() => {
-    if (!expToast) return;
-    const t = setTimeout(() => setExpToast(null), 3200);
-    return () => clearTimeout(t);
-  }, [expToast]);
 
   // ─── Auto-rotate on fullscreen (mobile) ───
   useEffect(() => {
@@ -517,31 +464,6 @@ const Watch = () => {
       vid.removeEventListener('canplaythrough', onCanPlay);
     };
   }, [videoUrl]);
-
-  // ─── EXP untuk pemutar embed/iframe (fallback) ───
-  // Kalau video native gagal dan kita jatuh ke <iframe>, kita tidak punya
-  // akses ke event `timeupdate` sehingga EXP dulu TIDAK PERNAH naik pada
-  // episode-episode yang memakai server embed. Di sini waktu nonton dihitung
-  // dari jam nyata, hanya bertambah selagi tab benar-benar terlihat, jadi
-  // menonton di server mana pun tetap menaikkan EXP.
-  useEffect(() => {
-    if (!uid || !episodeId || !videoFailed || !videoUrl) return;
-
-    const tick = () => {
-      if (document.visibilityState !== 'visible') return;
-      watchedSecondsRef.current += 1;
-      const completedBlocks = Math.floor(watchedSecondsRef.current / WATCH_BLOCK_SECONDS);
-      for (let b = 0; b < completedBlocks; b++) {
-        if (awardedBlocksRef.current.has(b)) continue;
-        awardedBlocksRef.current.add(b);
-        awardWatchBlockExp(uid, episodeId, b);
-        setExpToast({ exp: EXP_PER_WATCH_BLOCK, key: `${episodeId}-${b}-${Date.now()}` });
-      }
-    };
-
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [uid, episodeId, videoFailed, videoUrl]);
 
   // ─── Mundur / maju 10 detik (seperti YouTube) ───
   const [seekHint, setSeekHint] = useState(null); // { dir, key } | null
@@ -676,22 +598,6 @@ const Watch = () => {
 
   return (
     <div className="watch-page main-container">
-      {expToast && (
-        <div
-          key={expToast.key}
-          role="status"
-          aria-live="polite"
-          style={{
-            position: 'fixed', top: '16px', right: '16px', zIndex: 9999,
-            background: 'var(--color-primary)', color: '#fff',
-            padding: '10px 16px', borderRadius: '10px', fontWeight: 700,
-            fontSize: 'var(--text-sm)', boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
-            animation: 'watch-exp-toast-in 0.25s ease-out',
-          }}
-        >
-          +{expToast.exp} EXP — 5 menit menonton!
-        </div>
-      )}
       <div style={{ marginBottom: '12px' }}>
         {hasBack? (
           <Link to={backHref} className="back-link">Kembali ke {(animeData?.title || 'Anime').substring(0, 40)}</Link>
