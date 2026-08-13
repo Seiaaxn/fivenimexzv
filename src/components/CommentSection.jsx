@@ -81,6 +81,7 @@ const ReplyForm = ({ onSubmit, onCancel, posting, replyingToName }) => {
  */
 const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequireLogin }) => {
   const { user, profile } = useAuth();
+  const currentLevel = profile?.level ?? 1;
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
