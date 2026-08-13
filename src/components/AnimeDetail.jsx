@@ -10,11 +10,11 @@ import { getCustomAnime, listCustomAnime, buildCustomEpisodeId } from '../utils/
 // Semua provider sankavollerei ikut dicoba supaya "Episode list tidak
 // tersedia" tidak muncul hanya karena provider-nya belum terdaftar.
 const PROVIDER_ORDER = [
-  'otakudesu',
   'samehadaku',
+  'otakudesu',
+  'alqanime',
   'anoboy',
   'oploverz',
-  'alqanime',
   'nimegami',
   'stream',
 ];
