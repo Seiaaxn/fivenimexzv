@@ -422,6 +422,19 @@ export const normalizeAlqEpisode = (res, episodeRef, slug = '') => {
   if (!servers.length && group) servers = linksToServers(group.links || []);
   if (!servers.length) return { data: null };
 
+  // ─── Navigasi episode sebelumnya / berikutnya ───
+  // Alqanime tidak mengirim link next/prev secara langsung, jadi nomor
+  // episode dihitung dari `episode_list` pada respons detail (endpoint yang
+  // sama dipakai untuk episode), lalu diurutkan agar tetangganya diketahui.
+  const epNums = (Array.isArray(d.episode_list) ? d.episode_list : [])
+    .map((ep, i) => epNumber(ep.episode, ep.title) || i + 1)
+    .filter((n) => n > 0);
+  const uniqueNums = Array.from(new Set(epNums)).sort((a, b) => a - b);
+  const currentNum = epNumber(episodeRef, label || episodeRef);
+  const curIdx = uniqueNums.indexOf(currentNum);
+  const prevNum = curIdx > 0 ? uniqueNums[curIdx - 1] : null;
+  const nextNum = curIdx >= 0 && curIdx < uniqueNums.length - 1 ? uniqueNums[curIdx + 1] : null;
+
   return {
     data: {
       title: `${cleanTitle(d.title || '') || d.title || slug} ${label || ''}`.trim(),
@@ -432,6 +445,10 @@ export const normalizeAlqEpisode = (res, episodeRef, slug = '') => {
       servers,
       downloads: group?.links || [],
       provider: 'alqanime',
+      navigation: {
+        previous_episode: prevNum != null ? { slug: buildSankaEpisodeId('alqanime', slug, prevNum) } : null,
+        next_episode: nextNum != null ? { slug: buildSankaEpisodeId('alqanime', slug, nextNum) } : null,
+      },
     },
   };
 };
