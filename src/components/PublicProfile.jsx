@@ -6,7 +6,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { isVerifiedEmail } from '../utils/verified';
 import { isPremiumEmail } from '../utils/premium';
 import { isPremiumRole } from '../utils/roles';
-import { levelProgress } from '../utils/levels';
 import { useLiveUsers } from '../hooks/useLiveUsers';
 import { groupByType, CONTENT_TYPES, CONTENT_TYPE_LABELS } from '../utils/bookmarks';
 import {
@@ -23,7 +22,6 @@ import {
 } from '../utils/friends';
 import VerifiedBadge from './VerifiedBadge';
 import PremiumBadge from './PremiumBadge';
-import LevelBadge from './LevelBadge';
 import './PublicProfile.css';
 import './Profile.css';
 
@@ -224,7 +222,6 @@ const PublicProfile = () => {
   const isOwner = isPremiumEmail(targetProfile.email); // hanya email pemilik situs
   const statsPublic = targetProfile.statsPublic !== false;
   const stats = targetProfile.stats || {};
-  const lvProgress = levelProgress(targetProfile.exp || 0);
   const isFriend = friendReqStatus?.status === 'accepted';
   const receivedRequest = friendReqStatus?._direction === 'received' && friendReqStatus?.status === 'pending';
 
@@ -250,16 +247,6 @@ const PublicProfile = () => {
               {premium && !isOwner && <span className="pp-owner-tag" style={{ background: 'linear-gradient(135deg,#FFD86B,#F5A524)', color: '#7a4400' }}>Premium</span>}
             </p>
 
-            {/* Level row */}
-            <div className="pp-level-row">
-              <LevelBadge level={lvProgress.level} size="md" />
-              <div className="pp-level-progress">
-                <div className="level-progress__track">
-                  <div className="level-progress__fill" style={{ width: `${lvProgress.progressPercent}%` }} />
-                </div>
-                <span className="pp-level-exp">{lvProgress.expIntoLevel} / {lvProgress.expForNextLevel} EXP</span>
-              </div>
-            </div>
 
             {/* Follow counts */}
             <div className="pp-follow-counts">
@@ -311,8 +298,6 @@ const PublicProfile = () => {
           <div className="pp-stats">
             <StatCard value={stats.episodesWatched || 0} label="Episode" />
             <StatCard value={stats.favoritCount || 0} label="Favorit" />
-            <StatCard value={lvProgress.level} label="Level" />
-            <StatCard value={targetProfile.exp || 0} label="Total EXP" />
           </div>
 
           {/* Tabs */}
