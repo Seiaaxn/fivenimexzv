@@ -418,8 +418,19 @@ export const normalizeAlqEpisode = (res, episodeRef, slug = '') => {
   const label = matchEpisodeKey(keys, episodeRef);
   const group = groups.find((g) => (g?.title || '') === label);
 
-  let servers = linksToServers(Array.isArray(d.stream_links) ? d.stream_links : []);
-  if (!servers.length && group) servers = linksToServers(group.links || []);
+  // Gabungkan SEMUA sumber server yang tersedia — sebelumnya hanya
+  // `stream_links` yang dipakai (yang di Alqanime biasanya cuma berisi satu
+  // entri embed Acefile), sehingga mirror lain di `downloads` (grup episode
+  // yang cocok) tidak pernah muncul sebagai pilihan server. Sekarang
+  // keduanya digabung dan duplikat URL dibuang.
+  const streamServers = linksToServers(Array.isArray(d.stream_links) ? d.stream_links : []);
+  const downloadServers = group ? linksToServers(group.links || []) : [];
+  const seenUrls = new Set();
+  const servers = [...streamServers, ...downloadServers].filter((s) => {
+    if (!s?.url || seenUrls.has(s.url)) return false;
+    seenUrls.add(s.url);
+    return true;
+  });
   if (!servers.length) return { data: null };
 
   // ─── Navigasi episode sebelumnya / berikutnya ───
