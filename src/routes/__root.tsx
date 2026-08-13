@@ -32,21 +32,32 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
-        <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Go home
-          </Link>
+    <div className="notfound-page">
+      <div className="notfound-card">
+        <div className="notfound-badge" aria-hidden="true">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="8.5" y1="8.5" x2="13.5" y2="13.5" />
+            <line x1="13.5" y1="8.5" x2="8.5" y2="13.5" />
+          </svg>
         </div>
+        <p className="notfound-eyebrow">Error 404</p>
+        <h1 className="notfound-title">Halaman Tidak Ditemukan</h1>
+        <p className="notfound-desc">
+          Wah, sepertinya halaman yang kamu cari sudah dipindahkan, dihapus, atau memang belum pernah ada. Coba periksa lagi alamatnya, atau kembali ke salah satu halaman di bawah ini.
+        </p>
+        <div className="notfound-actions">
+          <Link to="/" className="btn btn-primary">Ke Beranda</Link>
+          <Link to="/search" className="btn btn-secondary">Cari Judul</Link>
+        </div>
+        <nav className="notfound-links" aria-label="Tautan cepat">
+          <Link to="/ongoing">Anime Ongoing</Link>
+          <span aria-hidden="true">•</span>
+          <Link to="/komik">Komik</Link>
+          <span aria-hidden="true">•</span>
+          <Link to="/schedule">Jadwal Rilis</Link>
+        </nav>
       </div>
     </div>
   );
