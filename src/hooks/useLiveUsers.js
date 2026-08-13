@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { levelFromExp } from '../utils/levels';
 
 /**
  * Banyak dokumen di app ini (komentar, pesan chat, daftar pengikut, dst)
@@ -82,8 +81,6 @@ export const useLiveUsers = (uids) => {
         displayName: data.displayName || '',
         photoURL: data.photoURL || '',
         email: data.email || '',
-        exp: data.exp || 0,
-        level: levelFromExp(data.exp || 0),
         role: data.role || 'user',
       };
     }
@@ -111,7 +108,6 @@ export const withLiveUser = (item, liveMap) => {
     displayName: live.displayName || item.displayName,
     photoURL: live.photoURL || item.photoURL,
     email: live.email || item.email,
-    level: live.level || item.level,
     role: live.role || item.role || 'user',
   };
 };
