@@ -145,22 +145,107 @@ export const normalizeSankaEpisode = (res, provider) => {
   };
 };
 
-// ── Nimegami: detail memakai `streams_by_episode` (tidak ada slug episode).
-// Episode dibuat sintetis: "<slug>::<Episode X>" supaya bisa dirouting.
+// ── Episode sintetis untuk provider tanpa slug episode (Nimegami, Alqanime).
+// Format: "<provider>$$<animeSlug>$$<nomorEpisode>"
+// Halaman /watch memakai prefix provider ini untuk langsung memanggil
+// endpoint provider yang benar (tidak lagi menebak semua provider).
 export const NIMEGAMI_EP_SEP = '$$';
+export const SANKA_EP_SEP = '$$';
+const SYNTHETIC_PROVIDERS = ['nimegami', 'alqanime'];
+
+export const buildSankaEpisodeId = (provider, slug, episode) =>
+  `${provider}${SANKA_EP_SEP}${slug}${SANKA_EP_SEP}${episode}`;
+
+export const parseSankaEpisodeId = (episodeId) => {
+  const parts = String(episodeId || '').split(SANKA_EP_SEP);
+  if (parts.length >= 3 && SYNTHETIC_PROVIDERS.includes(parts[0])) {
+    return { provider: parts[0], slug: parts[1], episode: parts.slice(2).join(SANKA_EP_SEP) };
+  }
+  // Format lama: "<slug>$$<Episode%201>" (selalu Nimegami)
+  if (parts.length === 2) {
+    let label = parts[1];
+    try { label = decodeURIComponent(label); } catch { /* biarkan apa adanya */ }
+    return { provider: 'nimegami', slug: parts[0], episode: label };
+  }
+  return null;
+};
+
+// Server streaming/embed dari daftar link download (fallback provider yang
+// tidak menyediakan URL streaming langsung).
+const linksToServers = (links = []) => {
+  const out = [];
+  links.forEach((l) => {
+    if (!l) return;
+    if (Array.isArray(l.urls)) {
+      l.urls.forEach((u) => {
+        if (u?.url) {
+          out.push({
+            title: `${u.server || 'Server'}${l.resolution ? ` ${l.resolution}` : ''}`,
+            name: `${u.server || 'Server'}${l.resolution ? ` ${l.resolution}` : ''}`,
+            url: u.url,
+            quality: l.resolution || 'Streaming',
+          });
+        }
+      });
+    } else if (l.url) {
+      out.push({
+        title: `${l.server || l.host || l.name || 'Server'}${l.resolution ? ` ${l.resolution}` : ''}`,
+        name: `${l.server || l.host || l.name || 'Server'}${l.resolution ? ` ${l.resolution}` : ''}`,
+        url: l.url,
+        quality: l.resolution || l.quality || 'Streaming',
+      });
+    }
+  });
+  return out;
+};
+
+// Cocokkan label episode ("Episode 12") dengan nomor / label yang diminta.
+const matchEpisodeKey = (keys, ref) => {
+  if (!keys.length) return null;
+  const refStr = String(ref ?? '').trim();
+  if (!refStr) return keys[0];
+  const exact = keys.find((k) => k === refStr);
+  if (exact) return exact;
+  const num = Number(refStr.replace(/[^\d]/g, ''));
+  if (num) {
+    const byNum = keys.find((k) => epNumber(k, k) === num);
+    if (byNum) return byNum;
+  }
+  return keys[0];
+};
 
 export const normalizeNimegamiDetail = (res, slug) => {
   const d = res?.detail;
   if (!d) return { data: null };
   const info = d.info || {};
   const streamsByEp = res?.streams_by_episode || {};
-  const episodeList = Object.keys(streamsByEp).map((label, i) => ({
-    episodeId: `${slug}${NIMEGAMI_EP_SEP}${encodeURIComponent(label)}`,
+  let episodeList = Object.keys(streamsByEp).map((label, i) => ({
+    episodeId: buildSankaEpisodeId('nimegami', slug, epNumber(label, label) || i + 1),
     slug,
+    label,
     title: label,
     episode: epNumber(label, label) || i + 1,
     releaseDate: '',
   }));
+
+  // Drama / Live Action: tidak ada `streams_by_episode`, hanya
+  // `detail.download_links`. Episode dibentuk dari `episode_title` supaya
+  // halaman detail tetap punya daftar episode yang bisa dibuka di /watch.
+  if (!episodeList.length && Array.isArray(d.download_links) && d.download_links.length) {
+    const titles = [];
+    d.download_links.forEach((l) => {
+      const t = l?.episode_title || 'Episode 1';
+      if (!titles.includes(t)) titles.push(t);
+    });
+    episodeList = titles.map((t, i) => ({
+      episodeId: buildSankaEpisodeId('nimegami', slug, epNumber(t, t) || i + 1),
+      slug,
+      label: t,
+      title: t,
+      episode: epNumber(t, t) || i + 1,
+      releaseDate: '',
+    }));
+  }
 
   return {
     data: {
@@ -188,28 +273,44 @@ export const normalizeNimegamiDetail = (res, slug) => {
   };
 };
 
-export const normalizeNimegamiEpisode = (res, episodeLabel) => {
+export const normalizeNimegamiEpisode = (res, episodeRef, slug = '') => {
   const map = res?.streams_by_episode || {};
-  const label = episodeLabel && map[episodeLabel] ? episodeLabel : Object.keys(map)[0];
-  const list = Array.isArray(map[label]) ? map[label] : [];
-  const servers = list
-    .filter((s) => s?.url)
-    .map((s, i) => ({
-      title: s.name || `Server ${i + 1}`,
-      name: s.name || `Server ${i + 1}`,
-      url: s.url,
-      quality: s.resolution || 'Streaming',
-    }));
+  const keys = Object.keys(map);
+  let label = matchEpisodeKey(keys, episodeRef);
+  let servers = label
+    ? (Array.isArray(map[label]) ? map[label] : [])
+        .filter((s) => s?.url)
+        .map((s, i) => ({
+          title: s.name || `Server ${i + 1}`,
+          name: s.name || `Server ${i + 1}`,
+          url: s.url,
+          quality: s.resolution || 'Streaming',
+        }))
+    : [];
+
+  // Fallback drama / live action: pakai download_links sebagai server embed.
+  const dlLinks = Array.isArray(res?.detail?.download_links) ? res.detail.download_links : [];
+  if (!servers.length && dlLinks.length) {
+    const titles = [];
+    dlLinks.forEach((l) => {
+      const t = l?.episode_title || 'Episode 1';
+      if (!titles.includes(t)) titles.push(t);
+    });
+    label = matchEpisodeKey(titles, episodeRef);
+    servers = linksToServers(dlLinks.filter((l) => (l?.episode_title || 'Episode 1') === label));
+  }
+
   if (!servers.length) return { data: null };
   const dlGroups = res?.download_groups || {};
   const dlKey = Object.keys(dlGroups).find((k) => k.startsWith(String(label)));
   return {
     data: {
       title: `${res?.detail?.title || ''} ${label || ''}`.trim(),
-      animeId: '',
+      animeId: slug,
+      poster: res?.detail?.poster || '',
       defaultStreamingUrl: servers[0].url,
       servers,
-      downloads: dlKey ? dlGroups[dlKey] : [],
+      downloads: dlKey ? dlGroups[dlKey] : dlLinks,
       provider: 'nimegami',
     },
   };
@@ -261,15 +362,21 @@ export const normalizeAlqDetail = (res, slug) => {
   const d = res?.data;
   if (!d) return { data: null };
   const info = d.info || {};
-  const episodeList = (Array.isArray(d.episode_list) ? d.episode_list : []).map((ep, i) => ({
-    episodeId: ep.slug || `${slug}-episode-${ep.episode ?? i + 1}`,
-    slug: ep.slug || '',
-    title: ep.title || `Episode ${ep.episode ?? i + 1}`,
-    episode: epNumber(ep.episode, ep.title) || i + 1,
-    releaseDate: ep.date || '',
-    // Alqanime kadang tidak punya slug episode — simpan link download sebagai fallback
-    downloads: ep.links || [],
-  }));
+  const episodeList = (Array.isArray(d.episode_list) ? d.episode_list : []).map((ep, i) => {
+    const num = epNumber(ep.episode, ep.title) || i + 1;
+    return {
+      // Alqanime sering mengirim slug = null. Tanpa episodeId yang valid,
+      // klik episode berujung "Episode tidak ditemukan". Karena itu dipakai
+      // id sintetis ber-prefix provider yang bisa dibuka di /watch.
+      episodeId: ep.slug || buildSankaEpisodeId('alqanime', slug, num),
+      slug: ep.slug || '',
+      title: ep.title || `Episode ${ep.episode ?? i + 1}`,
+      episode: num,
+      releaseDate: ep.date || '',
+      downloads: ep.links || [],
+    };
+  });
+
 
   return {
     data: {
@@ -299,6 +406,37 @@ export const normalizeAlqDetail = (res, slug) => {
     },
   };
 };
+
+// ── Alqanime episode: tidak ada endpoint episode terpisah, jadi server
+// diambil dari detail (`stream_links` bila ada, kalau tidak dari grup
+// `downloads` yang cocok dengan nomor episode).
+export const normalizeAlqEpisode = (res, episodeRef, slug = '') => {
+  const d = res?.data;
+  if (!d) return { data: null };
+  const groups = Array.isArray(d.downloads) ? d.downloads : [];
+  const keys = groups.map((g) => g?.title || '');
+  const label = matchEpisodeKey(keys, episodeRef);
+  const group = groups.find((g) => (g?.title || '') === label);
+
+  let servers = linksToServers(Array.isArray(d.stream_links) ? d.stream_links : []);
+  if (!servers.length && group) servers = linksToServers(group.links || []);
+  if (!servers.length) return { data: null };
+
+  return {
+    data: {
+      title: `${cleanTitle(d.title || '') || d.title || slug} ${label || ''}`.trim(),
+      animeId: slug,
+      poster: d.poster || '',
+      synopsis: d.synopsis || '',
+      defaultStreamingUrl: servers[0].url,
+      servers,
+      downloads: group?.links || [],
+      provider: 'alqanime',
+    },
+  };
+};
+
+
 
 // ── Stream (anime-indo) ──
 const streamCard = (item, statusFallback = '') => {
