@@ -596,6 +596,47 @@ const Watch = () => {
     ? animeData.synopsis.paragraphs
     : (typeof animeData?.synopsis === 'string' && animeData.synopsis ? [animeData.synopsis] : []);
 
+  // ─── Navigasi episode sebelumnya / berikutnya ───
+  const hasPrevEp = Boolean(episodeData?.navigation?.previous_episode || (episodeData?.hasPrevEpisode && !episodeData?.navigation));
+  const prevEpSlug = episodeData?.navigation?.previous_episode?.slug || episodeData?.prevEpisode?.episodeId || episodeId;
+  const hasNextEp = Boolean(episodeData?.navigation?.next_episode || (episodeData?.hasNextEpisode && !episodeData?.navigation));
+  const nextEpSlug = episodeData?.navigation?.next_episode?.slug || episodeData?.nextEpisode?.episodeId || episodeId;
+
+  const EpisodeNavigation = () => (
+    <div className="episode-navigation">
+      {hasPrevEp ? (
+        <Link to={`/watch/${prevEpSlug}`} className="episode-nav-btn episode-nav-btn--prev">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          <span className="episode-nav-btn__label">Eps Sebelumnya</span>
+        </Link>
+      ) : (
+        <button type="button" className="episode-nav-btn episode-nav-btn--prev is-disabled" disabled aria-disabled="true" title="Ini episode pertama">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          <span className="episode-nav-btn__label">Episode Pertama</span>
+        </button>
+      )}
+      {hasNextEp ? (
+        <Link to={`/watch/${nextEpSlug}`} className="episode-nav-btn episode-nav-btn--next">
+          <span className="episode-nav-btn__label">Eps Berikutnya</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </Link>
+      ) : (
+        <button type="button" className="episode-nav-btn episode-nav-btn--next is-disabled" disabled aria-disabled="true" title="Ini episode terakhir">
+          <span className="episode-nav-btn__label">Episode Terakhir</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="watch-page main-container">
       <div style={{ marginBottom: '12px' }}>
@@ -693,6 +734,8 @@ const Watch = () => {
         )}
       </div>
 
+      {/* Navigation cepat (di bawah player, sebelum pilihan server) */}
+      <EpisodeNavigation />
 
       {/* Quality & Server */}
       <div className="server-selector">
@@ -743,14 +786,7 @@ const Watch = () => {
       </div>
 
       {/* Navigation */}
-      <div className="episode-navigation">
-        {(episodeData?.navigation?.previous_episode || (episodeData?.hasPrevEpisode &&!episodeData?.navigation)) && (
-          <Link to={`/watch/${episodeData?.navigation?.previous_episode?.slug || episodeData?.prevEpisode?.episodeId || episodeId}`} className="btn btn-secondary" style={{ flex: 1, textAlign: 'center' }}>Eps Sebelumnya</Link>
-        )}
-        {(episodeData?.navigation?.next_episode || (episodeData?.hasNextEpisode &&!episodeData?.navigation)) && (
-          <Link to={`/watch/${episodeData?.navigation?.next_episode?.slug || episodeData?.nextEpisode?.episodeId || episodeId}`} className="btn btn-primary" style={{ flex: 1, textAlign: 'center' }}>Eps Berikutnya</Link>
-        )}
-      </div>
+      <EpisodeNavigation />
 
       {/* Anime Info */}
       {animeData && (
