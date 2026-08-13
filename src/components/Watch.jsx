@@ -36,11 +36,26 @@ const Watch = () => {
   const [videoFailed, setVideoFailed] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [buffering, setBuffering] = useState(false);
-  const [videoReady, setVideoReady] = useState(false); // trigger EXP effect ketika video element tersedia
+  const [videoReady, setVideoReady] = useState(0); // trigger EXP effect ketika video element tersedia
   const videoElRef = useRef(null);
   const saveTimerRef = useRef(null);
   const savedTimeRef = useRef(0);
   const historyItemRef = useRef(null);
+  // Ref callback STABIL. Kalau ditulis inline di JSX, React memanggilnya
+  // dengan null lalu elemen pada setiap render → setState di dalamnya
+  // memicu render lagi → "Maximum update depth exceeded" dan halaman
+  // menampilkan "Ada yang Salah" saat episode diklik.
+  const attachVideoEl = useCallback((el) => {
+    const prev = videoElRef.current;
+    videoElRef.current = el;
+    if (!el || el === prev) return;
+    el.onerror = () => {
+      devLog('[Watch] Video.js failed, falling back to iframe');
+      setVideoFailed(true);
+      setSwitching(false);
+    };
+    setVideoReady((n) => n + 1);
+  }, []);
   const uid = user?.uid || null;
   // Always-fresh mirror of `uid` for use inside the episode-fetch effect
   // below, which only re-runs on `episodeId` change (not on `uid` change).
@@ -168,11 +183,12 @@ const Watch = () => {
           ? [{ fn: () => animeAPI.getEpisodeDetailNimegami(episodeId), name: 'nimegami' }]
           : [
               { fn: () => animeAPI.getDonghuaEpisode(episodeId), name: 'donghua' },
-              { fn: () => animeAPI.getEpisodeDetail(episodeId), name: 'otakudesu' },
               { fn: () => animeAPI.getEpisodeDetailSamehadaku(episodeId), name: 'samehadaku' },
+              { fn: () => animeAPI.getEpisodeDetail(episodeId), name: 'otakudesu' },
               { fn: () => animeAPI.getEpisodeDetailAnoboy(episodeId), name: 'anoboy' },
               { fn: () => animeAPI.getEpisodeDetailOploverz(episodeId), name: 'oploverz' },
               { fn: () => animeAPI.getEpisodeDetailStream(episodeId), name: 'stream' },
+              { fn: () => animeAPI.getEpisodeDetailNaid(episodeId), name: 'nontonanimeid' },
             ];
 
 
@@ -681,19 +697,7 @@ const Watch = () => {
             <Player.Provider key={videoUrl}>
               <VideoSkin>
                 <Video
-                  ref={(el) => {
-                    const prev = videoElRef.current;
-                    videoElRef.current = el;
-                    if (el && el !== prev) {
-                      el.onerror = () => {
-                        devLog('[Watch] Video.js failed, falling back to iframe');
-                        setVideoFailed(true);
-                        setSwitching(false);
-                      };
-                      // Trigger ulang EXP effect setelah video element benar-benar ada
-                      setVideoReady((n) => n + 1);
-                    }
-                  }}
+                  ref={attachVideoEl}
                   src={videoUrl}
                   playsInline
                   autoPlay
