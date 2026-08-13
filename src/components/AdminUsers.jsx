@@ -5,14 +5,12 @@ import {
   ROLE_LABELS,
   watchUsers,
   updateUserRole,
-  updateUserProgress,
 } from '../utils/roles';
-import { levelProgress } from '../utils/levels';
 
 /**
  * Manajemen pengguna untuk admin: daftar realtime (onSnapshot) sehingga
  * setiap user yang baru login / daftar langsung muncul tanpa refresh.
- * Admin bisa ubah role (user / premium / admin) dan atur level / EXP.
+ * Admin bisa ubah role (user / premium / admin).
  */
 const AdminUsers = () => {
   const { user } = useAuth();
@@ -22,7 +20,6 @@ const AdminUsers = () => {
   const [keyword, setKeyword] = useState('');
   const [busyUid, setBusyUid] = useState(null);
   const [notice, setNotice] = useState('');
-  const [drafts, setDrafts] = useState({});
   const [expandedUid, setExpandedUid] = useState(null);
 
   // ─── Realtime listener — berjalan selama AdminUsers di-mount ───
@@ -94,31 +91,6 @@ const AdminUsers = () => {
     }
   };
 
-  const handleProgress = async (target, field) => {
-    const draft = drafts[target.uid] || {};
-    const value = draft[field];
-    if (value === undefined || value === '') {
-      setError('Isi nilai level atau EXP dulu.');
-      return;
-    }
-    setBusyUid(target.uid);
-    setError(null);
-    setNotice('');
-    try {
-      const res = await updateUserProgress(target.uid, { [field]: value });
-      patchLocal(target.uid, res);
-      setDrafts((d) => ({ ...d, [target.uid]: { ...d[target.uid], [field]: '' } }));
-      setNotice(`✅ ${target.displayName}: level ${res.level} · ${res.exp} EXP.`);
-    } catch (err) {
-      setError(err?.message ?? 'Gagal menyimpan level/EXP.');
-    } finally {
-      setBusyUid(null);
-    }
-  };
-
-  const setDraft = (uid, field, value) =>
-    setDrafts((d) => ({ ...d, [uid]: { ...d[uid], [field]: value } }));
-
   /** Format timestamp Firestore → string yang mudah dibaca. */
   const fmtTs = (ts) => {
     if (!ts) return '—';
@@ -184,8 +156,6 @@ const AdminUsers = () => {
       ) : (
         <div className="admin-user-list">
           {filtered.map((u) => {
-            const prog = levelProgress(u.exp);
-            const draft = drafts[u.uid] || {};
             const busy = busyUid === u.uid;
             const expanded = expandedUid === u.uid;
             const isMe = u.uid === user?.uid;
@@ -223,9 +193,6 @@ const AdminUsers = () => {
                     <span className="admin-hint" style={{ userSelect: 'text' }}>
                       {u.email || <em style={{ opacity: 0.5 }}>email tidak tersedia</em>}
                     </span>
-                    <span className="admin-hint">
-                      Level {prog.level} · {u.exp} EXP
-                    </span>
                   </div>
 
                   <span className={`admin-role-badge admin-role-badge--${u.role}`}>
@@ -253,9 +220,6 @@ const AdminUsers = () => {
                       <InfoChip label="Bergabung" value={fmtDate(u.createdAt)} />
                       <InfoChip label="Login terakhir" value={fmtTs(u.lastLoginAt)} />
                       <InfoChip label="Total login" value={u.loginCount || '—'} />
-                      <InfoChip label="EXP" value={u.exp} />
-                      <InfoChip label="Level" value={prog.level} />
-                      <InfoChip label="Progress" value={`${prog.progressPercent}%`} />
                     </div>
                   </div>
                 )}
@@ -280,46 +244,6 @@ const AdminUsers = () => {
                       🔒 Akun pemilik situs — selalu Admin, role tidak bisa diubah dari panel ini.
                     </p>
                   )}
-
-                  <div className="admin-user__progress">
-                    <div className="admin-user__field">
-                      <input
-                        type="number"
-                        min="1"
-                        max="200"
-                        className="admin-form__input"
-                        placeholder={`Level (kini ${prog.level})`}
-                        value={draft.level ?? ''}
-                        onChange={(e) => setDraft(u.uid, 'level', e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        disabled={busy}
-                        onClick={() => handleProgress(u, 'level')}
-                      >
-                        Set Level
-                      </button>
-                    </div>
-                    <div className="admin-user__field">
-                      <input
-                        type="number"
-                        min="0"
-                        className="admin-form__input"
-                        placeholder={`EXP (kini ${u.exp})`}
-                        value={draft.exp ?? ''}
-                        onChange={(e) => setDraft(u.uid, 'exp', e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        disabled={busy}
-                        onClick={() => handleProgress(u, 'exp')}
-                      >
-                        Set EXP
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             );
