@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from '@/lib/router-compat';
 import { comicAPI } from '../services/api';
 import { addToKomikHistory } from '../utils/komikHistory';
-import { awardChapterExp } from '../utils/levels';
 import { useAuth } from '../contexts/AuthContext';
 import './KomikReader.css';
 
@@ -114,7 +113,6 @@ const KomikReader = () => {
     const finished = mode === 'horizontal'
       ? currentImage >= lastIdx
       : loadedImages.has(lastIdx);
-    if (finished) awardChapterExp(user.uid, chapterSlug);
   }, [mode, currentImage, loadedImages, images.length, chapterSlug, user?.uid]);
 
   if (loading) {
