@@ -50,6 +50,7 @@ const Footer = () => {
             <div className="footer-col">
               <h4 className="footer-col-title">Bantuan</h4>
               <button type="button" className="footer-link footer-link-btn" onClick={() => setShowReport(true)}>Lapor Bug</button>
+              <Link to="/dmca" className="footer-link">DMCA</Link>
             </div>
           </div>
 
