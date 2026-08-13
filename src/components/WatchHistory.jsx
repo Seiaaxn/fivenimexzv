@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@/lib/router-compat';
-import { watchUserHistory, formatTime } from '../utils/watchHistory';
+import { watchUserHistory, formatTime, groupHistoryByAnime } from '../utils/watchHistory';
 import { useAuth } from '../contexts/AuthContext';
 
 const WatchHistory = () => {
   const { user } = useAuth();
-  const [history, setHistory] = useState([]);
+  const [rawHistory, setRawHistory] = useState([]);
 
-  useEffect(() => watchUserHistory(user?.uid || null, setHistory), [user?.uid]);
+  useEffect(() => watchUserHistory(user?.uid || null, setRawHistory), [user?.uid]);
+
+  // Satu kartu per anime (episode terakhir), bukan satu kartu per episode.
+  const history = useMemo(() => groupHistoryByAnime(rawHistory), [rawHistory]);
 
   if (!user) {
     return (
@@ -51,7 +54,7 @@ const WatchHistory = () => {
       <div className="anime-grid">
         {history.map((item, idx) => (
           <Link
-            key={`${item.animeId}-${item.episodeId}-${idx}`}
+            key={`${item.animeId || item.animeTitle}-${idx}`}
             to={`/watch/${item.episodeId}`}
             state={{ provider: item.provider, backAnimeId: item.animeId }}
             className="anime-card card"
@@ -83,6 +86,9 @@ const WatchHistory = () => {
                 <span className="episode-count">
                   {item.episodeTitle || `Episode ${item.episodeId}`}
                 </span>
+                {item.episodeCount > 1 && (
+                  <span className="episode-count">{item.episodeCount} episode ditonton</span>
+                )}
               </div>
               {item.currentTime > 0 && (
                 <div style={{ fontSize: '0.65rem', color: 'var(--color-primary)', fontWeight: 600, marginTop: '2px' }}>
