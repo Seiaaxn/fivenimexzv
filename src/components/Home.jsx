@@ -1,4 +1,4 @@
-import { useEffect, useState, memo } from 'react';
+import { useEffect, useMemo, useState, memo } from 'react';
 import { Link } from '@/lib/router-compat';
 import { animeAPI, comicAPI } from '../services/api';
 import { SkeletonAnimeGrid } from './Skeleton';
@@ -6,7 +6,7 @@ import AnimeCard from './AnimeCard';
 import Footer from './Footer';
 import GlobalChatBar from './GlobalChatBar';
 import AnnouncementBanner from './AnnouncementBanner';
-import { watchUserHistory, formatTime } from '../utils/watchHistory';
+import { watchUserHistory, formatTime, groupHistoryByAnime } from '../utils/watchHistory';
 import { mergeAnimeLists, mergeProviderLists } from '../utils/animeUtils';
 import { listCustomAnimeByStatus } from '../utils/customAnime';
 import { useAuth } from '../contexts/AuthContext';
@@ -117,10 +117,13 @@ const Home = () => {
   const [scheduleData, setScheduleData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [watchHistory, setWatchHistory] = useState([]);
+  const [rawWatchHistory, setRawWatchHistory] = useState([]);
   const [komikLoading, setKomikLoading] = useState(false);
 
-  useEffect(() => watchUserHistory(user?.uid || null, setWatchHistory), [user?.uid]);
+  useEffect(() => watchUserHistory(user?.uid || null, setRawWatchHistory), [user?.uid]);
+
+  // Rail "Lanjut Tonton": satu kartu per anime saja.
+  const watchHistory = useMemo(() => groupHistoryByAnime(rawWatchHistory), [rawWatchHistory]);
 
   useEffect(() => {
     let cancelled = false;
@@ -353,7 +356,7 @@ const Home = () => {
           </div>
           <div className="home-rail-scroll">
             {watchHistory.slice(0, 12).map((item, idx) => (
-              <div className="home-rail-card" key={`${item.animeId}-${item.episodeId}-${idx}`}>
+              <div className="home-rail-card" key={`${item.animeId || item.animeTitle}-${idx}`}>
                 <Link to={`/watch/${item.episodeId}`} state={{ provider: item.provider, backAnimeId: item.animeId }} className="anime-card card">
                   <div className="card-image-wrapper">
                     <span className="anime-card-badge anime-card-badge--ongoing">Lanjut</span>
