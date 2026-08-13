@@ -8,6 +8,8 @@ export const logError = (...args) => console.error(...args);
 
 import {
   NIMEGAMI_EP_SEP,
+  parseSankaEpisodeId,
+  normalizeAlqEpisode,
   normalizeSankaList,
   normalizeSankaGenres,
   normalizeSankaDetail,
@@ -865,12 +867,29 @@ const providers = {
       fetchAnime(`/nimegami/drama/${slug}`, 'nimegami').then((r) => normalizeNimegamiDetail(r, slug)),
     getAnimeDetail: (slug) =>
       fetchAnime(`/nimegami/detail/${slug}`, 'nimegami').then((r) => normalizeNimegamiDetail(r, slug)),
-    // episodeId: "<animeSlug>$$<Episode label ter-encode>"
-    getEpisodeDetail: (episodeId) => {
-      const [slug, rawLabel] = String(episodeId).split(NIMEGAMI_EP_SEP);
-      const label = rawLabel ? decodeURIComponent(rawLabel) : '';
-      return fetchAnime(`/nimegami/detail/${slug}`, 'nimegami', { priority: true })
-        .then((r) => normalizeNimegamiEpisode(r, label));
+    // episodeId: "nimegami$$<animeSlug>$$<nomor>" (format lama juga didukung)
+    getEpisodeDetail: async (episodeId) => {
+      const parsed = parseSankaEpisodeId(episodeId);
+      const slug = parsed?.slug || String(episodeId);
+      const ref = parsed?.episode ?? '';
+      // Nimegami punya 3 bentuk detail: anime, drama, dan live-action.
+      const paths = [
+        `/nimegami/detail/${slug}`,
+        `/nimegami/drama/${slug}`,
+        `/nimegami/live-action/${slug}`,
+      ];
+      let last = null;
+      for (const path of paths) {
+        try {
+          const raw = await fetchAnime(path, 'nimegami', { priority: true });
+          const out = normalizeNimegamiEpisode(raw, ref, slug);
+          if (out?.data) return out;
+          last = out;
+        } catch (err) {
+          last = null;
+        }
+      }
+      return last || { data: null };
     },
   },
 
@@ -898,6 +917,14 @@ const providers = {
       fetchAnime(`/alqanime/season/${slug}`, 'alqanime').then((r) => normalizeAlqList(r, 'season')),
     getAnimeDetail: (slug) =>
       fetchAnime(`/alqanime/detail/${slug}`, 'alqanime').then((r) => normalizeAlqDetail(r, slug)),
+    // episodeId: "alqanime$$<animeSlug>$$<nomor>"
+    getEpisodeDetail: (episodeId) => {
+      const parsed = parseSankaEpisodeId(episodeId);
+      const slug = parsed?.slug || String(episodeId);
+      const ref = parsed?.episode ?? '';
+      return fetchAnime(`/alqanime/detail/${slug}`, 'alqanime', { priority: true })
+        .then((r) => normalizeAlqEpisode(r, ref, slug));
+    },
   },
 
   // ── Stream / Anime Indo (sankavollerei) ──
@@ -1304,6 +1331,7 @@ export const animeAPI = {
   getDramaDetailNimegami: (slug) => providers.nimegami.getDramaDetail(slug),
   getAnimeDetailNimegami: (slug) => providers.nimegami.getAnimeDetail(slug),
   getEpisodeDetailNimegami: (episodeId) => providers.nimegami.getEpisodeDetail(episodeId),
+  getEpisodeDetailAlqanime: (episodeId) => providers.alqanime.getEpisodeDetail(episodeId),
 
   // ── Alqanime ──
   getHomeAlqanime: (page = 1) => providers.alqanime.getHome(page),
