@@ -293,8 +293,110 @@
 }
 
 .episode-navigation {
-  display: flex; justify-content: space-between;
-  gap: var(--space-3); margin-top: var(--space-4); margin-bottom: var(--space-4);
+  display: flex; gap: var(--space-3);
+  margin-top: var(--space-5); margin-bottom: var(--space-5);
+}
+.episode-nav-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-elevated);
+  border: var(--border-width) solid #0A0A0A;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.episode-nav-btn--prev { justify-content: flex-start; }
+.episode-nav-btn--next { justify-content: flex-end; }
+.episode-nav-btn svg { flex-shrink: 0; width: 20px; height: 20px; }
+.episode-nav-btn__label {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.episode-nav-btn:hover:not(.is-disabled),
+.episode-nav-btn:focus-visible:not(.is-disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: var(--shadow-press);
+  background: var(--color-primary);
+  color: #fff;
+  border-color: #0A0A0A;
+}
+.episode-nav-btn--next:hover:not(.is-disabled),
+.episode-nav-btn--next:focus-visible:not(.is-disabled) {
+  background: var(--color-secondary);
+}
+.episode-nav-btn:active:not(.is-disabled) {
+  transform: translate(5px, 5px);
+  box-shadow: none;
+}
+.episode-nav-btn.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+/* ========== 404 PAGE ========== */
+.notfound-page {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 65vh; padding: var(--space-6) var(--space-4);
+}
+.notfound-card {
+  max-width: 480px; width: 100%; text-align: center;
+  background: var(--color-surface-elevated);
+  border: var(--border-width) solid #0A0A0A;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-8) var(--space-6);
+  animation: fadeInUp 0.5s ease-out;
+}
+.notfound-badge {
+  width: 88px; height: 88px; margin: 0 auto var(--space-5);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--color-primary);
+  background: rgba(29, 78, 216, 0.1);
+  border: var(--border-width) solid #0A0A0A;
+  border-radius: 50%;
+  animation: float 3s ease-in-out infinite;
+}
+.notfound-eyebrow {
+  font-family: var(--font-heading); font-weight: 800; font-size: var(--text-sm);
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-secondary);
+  margin-bottom: var(--space-2);
+}
+.notfound-title {
+  font-family: var(--font-heading); font-weight: 900; font-size: var(--text-2xl);
+  color: var(--color-text); margin-bottom: var(--space-3); line-height: 1.2;
+}
+.notfound-desc {
+  font-size: var(--text-sm); color: var(--color-text-muted);
+  margin-bottom: var(--space-6); line-height: 1.6;
+}
+.notfound-actions {
+  display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: center;
+  margin-bottom: var(--space-5);
+}
+.notfound-links {
+  display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center;
+  font-size: var(--text-xs); color: var(--color-text-muted);
+}
+.notfound-links a { color: var(--color-primary); text-decoration: none; font-weight: 600; }
+.notfound-links a:hover { text-decoration: underline; }
+@media (max-width: 480px) {
+  .notfound-card { padding: var(--space-6) var(--space-4); }
+  .notfound-title { font-size: var(--text-xl); }
+  .notfound-actions .btn { flex: 1; }
 }
 
 /* ========== CARD PROVIDER TAG ========== */
@@ -346,7 +448,7 @@
   .detail-header { flex-direction: column; align-items: center; text-align: center; }
   .detail-poster { width: 160px; }
   .detail-meta { justify-content: center; }
-  .episode-navigation { flex-direction: column; }
+  .episode-nav-btn__label { font-size: 0.68rem; }
   .video-player-wrapper { border-radius: var(--radius-md) var(--radius-md) 0 0; }
   .server-selector { border-radius: 0 0 var(--radius-md) var(--radius-md); padding: var(--space-2) var(--space-3); }
   .schedule-summary { font-size: var(--text-xs); }
