@@ -35,6 +35,7 @@ import { Route as AnimeProviderAnimeIdRouteImport } from './routes/anime.$provid
 import { Route as ApiPublicImgProxyRouteImport } from './routes/api/public/img-proxy'
 import { Route as KomikReadChapterSlugRouteImport } from './routes/komik.read.$chapterSlug'
 import { Route as KomikTypeTypeRouteImport } from './routes/komik.type.$type'
+import { Route as DmcaRouteImport } from './routes/dmca'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -166,6 +167,11 @@ const KomikTypeTypeRoute = KomikTypeTypeRouteImport.update({
   path: '/komik/type/$type',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DmcaRoute = DmcaRouteImport.update({
+  id: '/dmca',
+  path: '/dmca',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -194,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/api/public/img-proxy': typeof ApiPublicImgProxyRoute
   '/komik/read/$chapterSlug': typeof KomikReadChapterSlugRoute
   '/komik/type/$type': typeof KomikTypeTypeRoute
+  '/dmca': typeof DmcaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -222,6 +229,7 @@ export interface FileRoutesByTo {
   '/api/public/img-proxy': typeof ApiPublicImgProxyRoute
   '/komik/read/$chapterSlug': typeof KomikReadChapterSlugRoute
   '/komik/type/$type': typeof KomikTypeTypeRoute
+  '/dmca': typeof DmcaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -251,6 +259,7 @@ export interface FileRoutesById {
   '/api/public/img-proxy': typeof ApiPublicImgProxyRoute
   '/komik/read/$chapterSlug': typeof KomikReadChapterSlugRoute
   '/komik/type/$type': typeof KomikTypeTypeRoute
+  '/dmca': typeof DmcaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -281,6 +290,7 @@ export interface FileRouteTypes {
     | '/api/public/img-proxy'
     | '/komik/read/$chapterSlug'
     | '/komik/type/$type'
+    | '/dmca'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -309,6 +319,7 @@ export interface FileRouteTypes {
     | '/api/public/img-proxy'
     | '/komik/read/$chapterSlug'
     | '/komik/type/$type'
+    | '/dmca'
   id:
     | '__root__'
     | '/'
@@ -337,6 +348,7 @@ export interface FileRouteTypes {
     | '/api/public/img-proxy'
     | '/komik/read/$chapterSlug'
     | '/komik/type/$type'
+    | '/dmca'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -366,6 +378,7 @@ export interface RootRouteChildren {
   ApiPublicImgProxyRoute: typeof ApiPublicImgProxyRoute
   KomikReadChapterSlugRoute: typeof KomikReadChapterSlugRoute
   KomikTypeTypeRoute: typeof KomikTypeTypeRoute
+  DmcaRoute: typeof DmcaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -552,6 +565,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KomikTypeTypeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dmca': {
+      id: '/dmca'
+      path: '/dmca'
+      fullPath: '/dmca'
+      preLoaderRoute: typeof DmcaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -582,6 +602,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicImgProxyRoute: ApiPublicImgProxyRoute,
   KomikReadChapterSlugRoute: KomikReadChapterSlugRoute,
   KomikTypeTypeRoute: KomikTypeTypeRoute,
+  DmcaRoute: DmcaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
