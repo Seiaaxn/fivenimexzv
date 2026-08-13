@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from '@/lib/router-compat';
 import { animeAPI, deriveEpisodeHint } from '../services/api';
@@ -784,9 +785,6 @@ const Watch = () => {
           </div>
         </div>
       </div>
-
-      {/* Navigation */}
-      <EpisodeNavigation />
 
       {/* Anime Info */}
       {animeData && (
