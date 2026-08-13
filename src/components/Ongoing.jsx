@@ -1,20 +1,37 @@
-import { useEffect } from 'react';
+import { useCallback } from 'react';
 import { animeAPI } from '../services/api';
 import { SkeletonAnimeGrid } from './Skeleton';
 import AnimeCard from './AnimeCard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { mergeAnimeLists } from '../utils/animeUtils';
+import { mergeProviderLists } from '../utils/animeUtils';
 import { listCustomAnimeByStatus } from '../utils/customAnime';
 
+const emptyList = { data: { animeList: [] } };
+
+// Semua provider dipanggil dengan halaman yang sama, jadi setiap scroll
+// benar-benar memuat data baru (bukan mengulang halaman 1 terus-menerus).
 const fetchOngoingData = async (page) => {
-  const [otakRes, sameRes] = await Promise.all([
-    animeAPI.getOngoing(page).catch(() => ({ data: { animeList: [] } })),
-    animeAPI.getOngoingSamehadaku().catch(() => ({ data: { animeList: [] } })),
+  const [sameRes, otakRes, alqRes, oploRes] = await Promise.all([
+    animeAPI.getOngoingSamehadaku(page).catch(() => emptyList),
+    animeAPI.getOngoing(page).catch(() => emptyList),
+    animeAPI.getOngoingAlqanime(page).catch(() => emptyList),
+    animeAPI.getOngoingOploverz(page).catch(() => emptyList),
   ]);
 
-  const otakList = otakRes?.data?.animeList || [];
-  const sameList = sameRes?.data?.animeList || [];
-  const merged = mergeAnimeLists(otakList, sameList);
+  const listOf = (res) => res?.data?.animeList || res?.animeList || [];
+
+  let merged = mergeProviderLists(listOf(sameRes), listOf(otakRes), {
+    primaryName: 'samehadaku',
+    secondaryName: 'otakudesu',
+  });
+  merged = mergeProviderLists(merged, listOf(alqRes), {
+    primaryName: 'samehadaku',
+    secondaryName: 'alqanime',
+  });
+  merged = mergeProviderLists(merged, listOf(oploRes), {
+    primaryName: 'samehadaku',
+    secondaryName: 'oploverz',
+  });
 
   if (page === 1) {
     const custom = await listCustomAnimeByStatus('ongoing').catch(() => []);
@@ -25,10 +42,9 @@ const fetchOngoingData = async (page) => {
 };
 
 const Ongoing = () => {
-  const fetchOngoing = async (page) => {
-    const merged = await fetchOngoingData(page);
-    return merged;
-  };
+  // Referensi stabil: kalau fungsinya dibuat ulang setiap render, observer
+  // infinite scroll ikut dibuat ulang dan daftar bisa "kedip"/hilang.
+  const fetchOngoing = useCallback((page) => fetchOngoingData(page), []);
 
   const {
     data: animes,
@@ -38,12 +54,6 @@ const Ongoing = () => {
     lastElementRef,
     reset
   } = useInfiniteScroll(fetchOngoing, []);
-
-  useEffect(() => {
-    return () => {
-      reset();
-    };
-  }, []);
 
   if (loading && animes.length === 0) {
     return (
@@ -86,17 +96,13 @@ const Ongoing = () => {
         <div className="anime-grid">
           {animes.map((anime, idx) => {
             const providers = anime.providers || [anime.provider];
-            const hasOtak = providers.includes('otakudesu');
-            const hasSame = providers.includes('samehadaku');
             const isCustomItem = anime.provider === 'custom';
-            const providerHint = isCustomItem
-              ? 'FiveNime'
-              : hasOtak && hasSame ? 'Otakudesu & Samehadaku' : (hasSame ? 'Samehadaku' : 'Otakudesu');
+            const providerHint = isCustomItem ? 'FiveNime' : providers.join(' & ');
 
             return (
               <AnimeCard
-                key={anime.animeId ?? anime.slug ?? idx}
-                anime={{ ...anime, provider: anime.provider ?? 'otakudesu' }}
+                key={`${anime.provider ?? 'p'}-${anime.animeId ?? anime.slug ?? idx}`}
+                anime={{ ...anime, provider: anime.provider ?? 'samehadaku' }}
                 index={idx}
                 innerRef={idx === animes.length - 1 ? lastElementRef : undefined}
                 statusOverride="Ongoing"
