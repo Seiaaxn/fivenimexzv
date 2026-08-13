@@ -15,7 +15,6 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { VERIFIED_EMAIL } from './verified';
-import { levelFromExp, expForLevel } from './levels';
 
 export const ROLE_USER = 'user';
 export const ROLE_PREMIUM = 'premium';
@@ -64,8 +63,6 @@ const normalizeUser = (d) => {
     role: resolveRole(data, data.email),
     storedRole: ROLES.includes((data.role || '').toLowerCase()) ? data.role.toLowerCase() : ROLE_USER,
     isOwner: isOwnerEmail(data.email),
-    exp: data.exp || 0,
-    level: data.level || levelFromExp(data.exp || 0),
     createdAt: data.createdAt || null,
     lastLoginAt: data.lastLoginAt || null,
     loginCount: data.loginCount || 0,
@@ -166,28 +163,3 @@ export const updateUserRole = async (uid, role) => {
   }
 };
 
-/**
- * Set level dan/atau EXP seorang user.
- * - Kalau `exp` diisi, level otomatis dihitung ulang dari EXP.
- * - Kalau hanya `level` diisi, EXP di-set ke EXP minimum level tersebut
- *   supaya progress bar di profil tetap konsisten.
- */
-export const updateUserProgress = async (uid, { level, exp } = {}) => {
-  if (!uid) throw new Error('UID tidak valid.');
-  const payload = { updatedAt: serverTimestamp() };
-
-  if (exp !== undefined && exp !== null && exp !== '') {
-    const nextExp = Math.max(0, Math.round(Number(exp) || 0));
-    payload.exp = nextExp;
-    payload.level = levelFromExp(nextExp);
-  } else if (level !== undefined && level !== null && level !== '') {
-    const nextLevel = Math.min(200, Math.max(1, Math.round(Number(level) || 1)));
-    payload.level = nextLevel;
-    payload.exp = expForLevel(nextLevel);
-  } else {
-    throw new Error('Isi level atau EXP terlebih dahulu.');
-  }
-
-  await setDoc(doc(db, 'users', uid), payload, { merge: true });
-  return { level: payload.level, exp: payload.exp };
-};
