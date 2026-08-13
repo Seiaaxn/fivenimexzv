@@ -3,16 +3,14 @@ import { Link } from '@/lib/router-compat';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { watchUserHistory, formatTime, removeFromWatchHistory, clearWatchHistory } from '../utils/watchHistory';
+import { watchUserHistory, formatTime, removeFromWatchHistory, clearWatchHistory, groupHistoryByAnime } from '../utils/watchHistory';
 import { watchUserKomikHistory, removeFromKomikHistory, clearKomikHistory } from '../utils/komikHistory';
 import { watchUserBookmarks, removeBookmark, groupByType, CONTENT_TYPES, CONTENT_TYPE_LABELS } from '../utils/bookmarks';
 import { watchFollowers, watchFollowing, unfollowUser } from '../utils/friends';
 import { isVerifiedEmail } from '../utils/verified';
 import { isPremiumEmail } from '../utils/premium';
-import { levelProgress } from '../utils/levels';
 import VerifiedBadge from './VerifiedBadge';
 import PremiumBadge from './PremiumBadge';
-import LevelBadge from './LevelBadge';
 import AuthModal from './AuthModal';
 import './PublicProfile.css';
 import AdminPanel from './AdminPanel';
@@ -79,42 +77,59 @@ const GroupedBookmarks = ({ items, emptyText, onRemove }) => {
   );
 };
 
-/** A watch-history card with a small "×" button to remove that one entry. */
-const HistoryCard = ({ item, onRemove }) => (
-  <div className="anime-card card" style={{ position: 'relative' }}>
-    <button
-      type="button"
-      className="history-card__remove"
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(item.episodeId); }}
-      aria-label="Hapus dari riwayat"
-      title="Hapus dari riwayat"
-    >
-      ×
-    </button>
-    <Link
-      to={`/watch/${item.episodeId}`}
-      state={{ provider: item.provider, backAnimeId: item.animeId }}
-      className="card-image-wrapper"
-      style={{ display: 'block' }}
-    >
-      {item.poster && <img src={item.poster} alt={item.animeTitle} className="poster" loading="lazy" decoding="async" />}
-      <div className="card-overlay"><span className="play-icon" aria-hidden>Play</span></div>
-    </Link>
-    <div className="anime-info">
-      <h3>{item.animeTitle}</h3>
-      <div className="meta"><span className="episode-count">{item.episodeTitle || `Episode ${item.episodeId}`}</span></div>
-      {item.currentTime > 0 && (
-        <div style={{ fontSize: '0.65rem', color: 'var(--color-primary)', fontWeight: 600, marginTop: '2px' }}>
-          {formatTime(item.currentTime)}{item.duration > 0? ` / ${formatTime(item.duration)}` : ''}
-        </div>
+/** A watch-history card styled like the Home "Lanjut Tonton" rail card. */
+const HistoryCard = ({ item, onRemove }) => {
+  const pct = item.currentTime > 0 && item.duration > 0
+    ? Math.min((item.currentTime / item.duration) * 100, 100)
+    : 0;
+  return (
+    <div className="anime-card card history-card">
+      {onRemove && (
+        <button
+          type="button"
+          className="history-card__remove"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(item.episodeId); }}
+          aria-label="Hapus dari riwayat"
+          title="Hapus dari riwayat"
+        >
+          ×
+        </button>
       )}
+      <Link
+        to={`/watch/${item.episodeId}`}
+        state={{ provider: item.provider, backAnimeId: item.animeId }}
+        className="card-image-wrapper"
+        style={{ display: 'block' }}
+      >
+        <span className="anime-card-badge anime-card-badge--ongoing">Lanjut</span>
+        {item.poster
+          ? <img src={item.poster} alt={item.animeTitle} className="poster" loading="lazy" decoding="async" />
+          : <div className="history-card__noposter">Video</div>}
+        <div className="card-overlay"><span className="play-icon" aria-hidden>Play</span></div>
+        {pct > 0 && (
+          <div className="history-card__progress">
+            <div className="history-card__progress-fill" style={{ width: `${pct}%` }} />
+          </div>
+        )}
+      </Link>
+      <div className="anime-info">
+        <h3>{item.animeTitle}</h3>
+        <div className="meta">
+          <span className="episode-count">{item.episodeTitle || `Episode ${item.episodeId}`}</span>
+        </div>
+        {item.currentTime > 0 && (
+          <div className="history-card__time">
+            {formatTime(item.currentTime)}{item.duration > 0 ? ` / ${formatTime(item.duration)}` : ''}
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /** A komik-history card with a small "×" button to remove that one entry. */
 const KomikHistoryCard = ({ item, onRemove }) => (
-  <div className="anime-card card" style={{ position: 'relative' }}>
+  <div className="anime-card card history-card">
     <button
       type="button"
       className="history-card__remove"
@@ -197,10 +212,11 @@ const Profile = () => {
     };
   }, [history, favorites]);
 
-  const progress = useMemo(() => levelProgress(profile?.exp || 0), [profile?.exp]);
+  // Sama seperti Home: satu kartu per anime (bukan per episode).
+  const groupedHistory = useMemo(() => groupHistoryByAnime(history), [history]);
 
   const continueWatching = useMemo(() => {
-    return history
+    return groupHistoryByAnime(history)
      .filter((h) => (h.currentTime || 0) > 5 && (!h.duration || h.duration - h.currentTime > 30))
      .slice(0, 12);
   }, [history]);
@@ -382,16 +398,6 @@ const Profile = () => {
                   {premium && !isOwner && <span className="pp-owner-tag" style={{ background: 'linear-gradient(135deg,#FFD86B,#F5A524)', color: '#7a4400' }}>Premium</span>}
                 </p>
 
-                {/* Level row */}
-                <div className="pp-level-row">
-                  <LevelBadge level={progress.level} size="md" />
-                  <div className="pp-level-progress">
-                    <div className="level-progress__track">
-                      <div className="level-progress__fill" style={{ width: `${progress.progressPercent}%` }} />
-                    </div>
-                    <span className="pp-level-exp">{progress.expIntoLevel} / {progress.expForNextLevel} EXP</span>
-                  </div>
-                </div>
 
                 {/* Follow counts */}
                 <div className="pp-follow-counts">
@@ -435,8 +441,6 @@ const Profile = () => {
         <div className="pp-stats">
           <StatCard value={stats.episodesWatched} label="Episode" />
           <StatCard value={stats.favoritCount} label="Favorit" />
-          <StatCard value={progress.level} label="Level" />
-          <StatCard value={profile?.exp || 0} label="Total EXP" />
         </div>
       </section>
 
@@ -484,7 +488,7 @@ const Profile = () => {
               <p className="comment-empty">Belum ada riwayat tonton.</p>
             ) : (
               <div className="anime-grid">
-                {history.slice(0, 24).map((item, idx) => (
+                {groupedHistory.slice(0, 24).map((item, idx) => (
                   <HistoryCard key={`${item.episodeId}-${idx}`} item={item} onRemove={handleRemoveHistoryItem} />
                 ))}
               </div>
