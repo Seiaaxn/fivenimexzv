@@ -131,6 +131,34 @@ const waitForRateLimit = async () => {
 // enqueue kept for backward compat but now just parallel with rate-limit guard
 const enqueue = (fn) => fn();
 
+// ═══════════════════════════════════════════════════════
+// PROVIDER HEALTH — provider yang balas 403/5xx (mis. otakudesu diblokir
+// upstream) ditandai "sakit" selama 5 menit supaya request berikutnya
+// langsung gagal cepat dan fallback provider lain dipakai tanpa menunggu.
+// ═══════════════════════════════════════════════════════
+const PROVIDER_DOWN_TTL = 5 * 60 * 1000;
+const providerHealth = new Map(); // name -> { fails, downUntil }
+
+const isProviderDown = (name) => {
+  const h = providerHealth.get(name);
+  return !!(h && h.downUntil && Date.now() < h.downUntil);
+};
+
+const markProviderFailure = (name) => {
+  if (!name || name === 'default') return;
+  const h = providerHealth.get(name) || { fails: 0, downUntil: 0 };
+  h.fails += 1;
+  if (h.fails >= 2) h.downUntil = Date.now() + PROVIDER_DOWN_TTL;
+  providerHealth.set(name, h);
+};
+
+const markProviderSuccess = (name) => {
+  if (!name) return;
+  providerHealth.set(name, { fails: 0, downUntil: 0 });
+};
+
+export const getProviderHealth = () => Object.fromEntries(providerHealth);
+
 // Debounce function
 export const debounce = (fn, delay) => {
   let timeout;
@@ -246,6 +274,11 @@ const fetchAnime = async (endpoint, _provider = 'default', { priority = false, s
   const cachedData = getFromCache(url);
   if (cachedData) return cachedData;
 
+  // 1b. Provider sedang down (403/5xx berulang) → gagal cepat
+  if (isProviderDown(_provider)) {
+    throw new APIError(`Provider ${_provider} sedang tidak tersedia`, 503);
+  }
+
   // 2. Check global rate limit — only blocks when near threshold
   if (isRateLimited()) {
     await waitForRateLimit();
@@ -289,18 +322,29 @@ const fetchAnime = async (endpoint, _provider = 'default', { priority = false, s
           throw new APIError('Episode atau anime tidak ditemukan', 404);
         }
 
-        if (parsed && typeof parsed === 'object') return parsed;
+        // Respons error yang tetap JSON (mis. "Plana AI Detector" 403) BUKAN
+        // data valid — jangan dikembalikan seolah sukses.
+        if (parsed && typeof parsed === 'object' && parsed.status === 'success') {
+          markProviderSuccess(_provider);
+          return parsed;
+        }
 
-        throw new APIError(`Server error: ${response.status}`, response.status);
+        markProviderFailure(_provider);
+        throw new APIError(
+          parsed?.message || `Server error: ${response.status}`,
+          response.status,
+        );
       }
 
       const data = await response.json();
+      markProviderSuccess(_provider);
       setCache(url, data);
       return data;
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
       if (error instanceof APIError) throw error;
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        markProviderFailure(_provider);
         throw new Error('Gagal terhubung ke server. Periksa koneksi internet.');
       }
       throw error;
@@ -617,8 +661,8 @@ const providers = {
   
   samehadaku: {
     getHome: () => fetchAnime('/samehadaku/home', 'samehadaku'),
-    getOngoing: () => fetchAnime('/samehadaku/ongoing', 'samehadaku'),
-    getCompleted: () => fetchAnime('/samehadaku/completed', 'samehadaku'),
+    getOngoing: (page = 1) => fetchAnime(`/samehadaku/ongoing?page=${page}`, 'samehadaku'),
+    getCompleted: (page = 1) => fetchAnime(`/samehadaku/completed?page=${page}`, 'samehadaku'),
     getPopular: () => fetchAnime('/samehadaku/popular', 'samehadaku'),
     getMovies: () => fetchAnime('/samehadaku/movies', 'samehadaku'),
     getList: () => fetchAnime('/samehadaku/list', 'samehadaku'),
@@ -1208,12 +1252,12 @@ export const animeAPI = {
    },
 
    // Samehadaku ongoing list
-   getOngoingSamehadaku: async () => {
+    getOngoingSamehadaku: async (page = 1) => {
      const providerAPI = providers.samehadaku;
      if (!providerAPI?.getOngoing) {
        throw new Error('Samehadaku provider does not support getOngoing');
      }
-     return providerAPI.getOngoing();
+      return providerAPI.getOngoing(page);
    },
 
    // Get completed anime (uses default provider)
@@ -1226,12 +1270,12 @@ export const animeAPI = {
    },
 
    // Samehadaku completed list
-   getCompletedSamehadaku: async () => {
+    getCompletedSamehadaku: async (page = 1) => {
      const providerAPI = providers.samehadaku;
      if (!providerAPI?.getCompleted) {
        throw new Error('Samehadaku provider does not support getCompleted');
      }
-     return providerAPI.getCompleted();
+      return providerAPI.getCompleted(page);
    },
 
   // Samehadaku full A-Z style list
