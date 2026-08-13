@@ -5,11 +5,9 @@ import { watchComments, addComment, deleteComment } from '../utils/comments';
 import { isVerifiedEmail } from '../utils/verified';
 import { isPremiumEmail } from '../utils/premium';
 import { isPremiumRole } from '../utils/roles';
-import { levelFromExp } from '../utils/levels';
 import { useLiveUsers, withLiveUser } from '../hooks/useLiveUsers';
 import VerifiedBadge from './VerifiedBadge';
 import PremiumBadge from './PremiumBadge';
-import LevelBadge from './LevelBadge';
 import './CommentSection.css';
 
 const timeAgo = (createdAt) => {
@@ -22,7 +20,7 @@ const timeAgo = (createdAt) => {
   return `${Math.floor(diff / 86400)} hari lalu`;
 };
 
-const CommentAuthor = ({ uid, name, email, level, role }) => {
+const CommentAuthor = ({ uid, name, email, role }) => {
   const owner = isPremiumRole({ role }, email) || isPremiumEmail(email);
   const isSiteOwner = isPremiumEmail(email);
   return (
@@ -34,7 +32,6 @@ const CommentAuthor = ({ uid, name, email, level, role }) => {
       </Link>
       {isSiteOwner && <span className="comment-item__owner-tag">Pemilik</span>}
       {owner && !isSiteOwner && <span className="comment-item__owner-tag" style={{ background: 'linear-gradient(135deg,#FFD86B,#F5A524)', color: '#7a4400' }}>Premium</span>}
-      {level > 0 && <LevelBadge level={level} size="sm" />}
     </span>
   );
 };
@@ -129,8 +126,6 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
   // nama/foto profil atau naik level, timpa dengan data live per uid.
   const liveUsers = useLiveUsers(useMemo(() => comments.map((c) => c.uid), [comments]));
 
-  const currentLevel = levelFromExp(profile?.exp || 0);
-
   const postComment = async ({ replyText, parentId, replyToName, replyToUid }) => {
     if (!user) { onRequireLogin?.(); return; }
     const body = replyText ?? text;
@@ -171,7 +166,6 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
   const renderReply = (raw, rootId) => {
     const r = withLiveUser(raw, liveUsers);
     const isReplying = replyingTo?.parentId === rootId && replyingTo?.replyId === r.id;
-    const level = r.level || levelFromExp(r.exp || 0) || 1;
     const owner = isPremiumRole({ role: r.role }, r.email) || isPremiumEmail(r.email);
     return (
       <li key={r.id} className={`comment-item comment-item--reply${owner ? ' comment-item--owner' : ''}`}>
@@ -180,7 +174,7 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
         </Link>
         <div className="comment-item__body">
           <div className="comment-item__meta">
-            <CommentAuthor uid={r.uid} name={r.displayName} email={r.email} level={level} role={r.role} />
+            <CommentAuthor uid={r.uid} name={r.displayName} email={r.email} role={r.role} />
             <span className="comment-item__time">{timeAgo(r.createdAt)}</span>
           </div>
           {r.replyToName && r.replyToUid && (
@@ -226,7 +220,6 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
     const c = withLiveUser(raw, liveUsers);
     const isReplying = replyingTo?.parentId === c.id && !replyingTo?.replyId;
     const replies = repliesByParent[c.id] || [];
-    const level = c.level || levelFromExp(c.exp || 0) || 1;
     const owner = isPremiumRole({ role: c.role }, c.email) || isPremiumEmail(c.email);
     return (
       <li key={c.id} className={`comment-item${owner ? ' comment-item--owner' : ''}`}>
@@ -235,7 +228,7 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
         </Link>
         <div className="comment-item__body">
           <div className="comment-item__meta">
-            <CommentAuthor uid={c.uid} name={c.displayName} email={c.email} level={level} role={c.role} />
+            <CommentAuthor uid={c.uid} name={c.displayName} email={c.email} role={c.role} />
             <span className="comment-item__time">{timeAgo(c.createdAt)}</span>
           </div>
           <p className="comment-item__text">{c.text}</p>
@@ -297,7 +290,6 @@ const CommentSection = ({ contentType = 'anime', contentId, contentTitle, onRequ
           <div className="comment-form__body">
             <div className="comment-form__user-info">
               <span className="comment-form__name">{profile?.displayName || user.displayName || 'Pengguna'}</span>
-              <LevelBadge level={currentLevel} size="sm" />
             </div>
             <textarea
               value={text}
