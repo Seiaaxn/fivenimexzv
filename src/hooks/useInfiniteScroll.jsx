@@ -15,6 +15,14 @@ export const useInfiniteScroll = (fetchData, initialData = []) => {
     return () => { isMounted.current = false; };
   }, []);
 
+  // Kunci unik per item supaya item yang sama tidak muncul dua kali
+  // (provider berbeda / halaman berbeda sering mengembalikan judul sama).
+  const seenRef = useRef(new Set());
+  const itemKey = (item, i) =>
+    String(
+      item?.animeId ?? item?.slug ?? item?.id ?? item?.title ?? item?.name ?? `idx-${i}`,
+    ).toLowerCase();
+
   const loadPage = useCallback(async (pageNum) => {
     setLoading(true);
     setError(null);
@@ -22,11 +30,23 @@ export const useInfiniteScroll = (fetchData, initialData = []) => {
       const newData = await fetchData(pageNum);
       if (!isMounted.current) return;
       const list = Array.isArray(newData) ? newData : (newData?.data?.animeList ?? newData?.animeList ?? []);
-      if (list.length > 0) {
-        setData(prev => (pageNum <= 1 ? list : [...prev, ...list]));
+
+      if (pageNum <= 1) seenRef.current = new Set();
+      const fresh = [];
+      (list || []).forEach((item, i) => {
+        const key = itemKey(item, i);
+        if (seenRef.current.has(key)) return;
+        seenRef.current.add(key);
+        fresh.push(item);
+      });
+
+      if (fresh.length > 0) {
+        setData(prev => (pageNum <= 1 ? fresh : [...prev, ...fresh]));
         setPage(pageNum);
       }
-      if (!list || list.length === 0) {
+      // Halaman kosong ATAU seluruhnya duplikat → hentikan infinite scroll,
+      // supaya daftar tidak "hilang lalu muncul lagi" berulang.
+      if (!list || list.length === 0 || fresh.length === 0) {
         setHasMore(false);
       }
     } catch (err) {
@@ -63,6 +83,7 @@ export const useInfiniteScroll = (fetchData, initialData = []) => {
     setPage(0);
     setHasMore(true);
     setError(null);
+    seenRef.current = new Set();
     loadPage(1);
   }, [loadPage]);
 
