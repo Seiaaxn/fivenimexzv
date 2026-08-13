@@ -357,6 +357,64 @@ const fetchAnime = async (endpoint, _provider = 'default', { priority = false, s
 };
 
 // ═══════════════════════════════════════════════════════
+// HELPER PENCOCOKAN JUDUL & NOMOR EPISODE (dipakai resolver lintas-provider)
+// ═══════════════════════════════════════════════════════
+const titleTokens = (title = '') =>
+  String(title)
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b(sub(title)?\s*indo(nesia)?|batch|bd|tv|movie|ova|ona|special)\b/g, ' ')
+    .replace(/\bseason\s*(\d+)\b/g, 's$1')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+
+// Skor kemiripan sederhana: proporsi token keyword yang muncul di kandidat.
+const titleSimilarity = (candidate, keyword) => {
+  const a = titleTokens(candidate);
+  const b = titleTokens(keyword);
+  if (!a.length || !b.length) return 0;
+  const setA = new Set(a);
+  const hit = b.filter((t) => setA.has(t)).length;
+  return hit / b.length;
+};
+
+export const pickBestTitleMatch = (list = [], keyword = '', minScore = 0.6) => {
+  let best = null;
+  let bestScore = 0;
+  list.forEach((item) => {
+    const score = Math.max(
+      titleSimilarity(item.title || '', keyword),
+      titleSimilarity(item.animeId || item.slug || '', keyword),
+    );
+    if (score > bestScore) { bestScore = score; best = item; }
+  });
+  return bestScore >= minScore ? best : null;
+};
+
+const epNumberFromAny = (ep = {}) => {
+  const fromField = Number(String(ep.episode ?? '').replace(/[^\d]/g, ''));
+  if (fromField) return fromField;
+  const m = String(ep.title || ep.episodeId || '').match(/episode[\s-]*0*(\d+)/i);
+  return m ? Number(m[1]) : 0;
+};
+
+// Dari episodeId (mis. "one-piece-episode-1173-subtitle-indonesia") tebak
+// judul anime + nomor episode, supaya halaman watch tetap bisa mencari
+// provider pengganti walau dibuka lewat URL langsung / reload (tanpa state).
+export const deriveEpisodeHint = (episodeId = '') => {
+  const raw = decodeURIComponent(String(episodeId));
+  const m = raw.match(/^(.*?)[-_]episode[-_]0*(\d+)/i);
+  if (!m) return null;
+  return {
+    animeTitle: m[1].replace(/[-_]+/g, ' ').trim(),
+    animeSlug: m[1],
+    episodeNumber: Number(m[2]),
+  };
+};
+
+// ═══════════════════════════════════════════════════════
 // ANOBOY NORMALIZER
 // Respons mentah Anoboy: { status, source, anime_list | genres | detail | streams }
 // Dibuat menyerupai bentuk otakudesu/samehadaku: { data: { animeList | ... } }
@@ -953,6 +1011,72 @@ export const animeAPI = {
        throw new Error('Stream provider does not support getEpisodeDetail');
      }
      return providerAPI.getEpisodeDetail(slug);
+   },
+
+   // ─────────────────────────────────────────────────────────────
+   // RESOLVER EPISODE LINTAS-PROVIDER
+   // Beberapa provider (mis. Alqanime) punya daftar episode TAPI tidak
+   // punya endpoint streaming per-episode, jadi episodeId-nya "palsu"
+   // (dibentuk dari judul + nomor). Kalau dibuka langsung, semua endpoint
+   // episode gagal → "Episode tidak ditemukan".
+   // Fungsi ini memakai judul + nomor episode untuk mencari judul yang
+   // sama di provider yang PUNYA streaming, lalu mengambil episode
+   // dengan nomor yang sama dari provider tersebut.
+   // ─────────────────────────────────────────────────────────────
+   resolveEpisodeFallback: async ({ animeTitle, animeSlug, episodeNumber, exclude = [] } = {}) => {
+     const keyword = String(animeTitle || animeSlug || '')
+       .replace(/[-_]+/g, ' ')
+       .replace(/\b(sub(title)?\s*indo(nesia)?|batch|bd)\b/gi, ' ')
+       .replace(/\s+/g, ' ')
+       .trim();
+     const num = Number(episodeNumber);
+     if (!keyword || !num) return null;
+
+     const order = ['samehadaku', 'otakudesu', 'oploverz', 'anoboy', 'nimegami', 'stream', 'nontonanimeid']
+       .filter((p) => !exclude.includes(p));
+
+     const shortKeyword = keyword.split(' ').slice(0, 4).join(' ');
+
+     for (const name of order) {
+       const api = providers[name];
+       if (!api?.search || !api?.getAnimeDetail || !api?.getEpisodeDetail) continue;
+       try {
+         let res = await api.search(shortKeyword).catch(() => null);
+         let list = res?.data?.animeList || [];
+         if (!list.length && shortKeyword !== keyword) {
+           res = await api.search(keyword).catch(() => null);
+           list = res?.data?.animeList || [];
+         }
+         if (!list.length) continue;
+
+         const best = pickBestTitleMatch(list, keyword);
+         if (!best) continue;
+
+         const detail = await api
+           .getAnimeDetail(best.animeId || best.slug || best.href)
+           .catch(() => null);
+         const eps = detail?.data?.episodeList || [];
+         if (!eps.length) continue;
+
+         const match =
+           eps.find((ep) => Number(ep.episode) === num) ||
+           eps.find((ep) => epNumberFromAny(ep) === num);
+         if (!match?.episodeId) continue;
+
+         const data = await api.getEpisodeDetail(match.episodeId).catch(() => null);
+         const hasStream =
+           data?.streaming?.servers ||
+           data?.data?.defaultStreamingUrl ||
+           data?.data?.servers ||
+           data?.data?.server;
+         if (!hasStream) continue;
+
+         return { data, provider: name, episodeId: match.episodeId };
+       } catch {
+         // provider ini gagal — coba provider berikutnya
+       }
+     }
+     return null;
    },
 
    // Get streaming server URL (uses default provider)
