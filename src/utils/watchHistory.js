@@ -97,6 +97,30 @@ export const watchUserHistory = (uid, callback) => {
   );
 };
 
+/**
+ * Gabungkan riwayat per ANIME.
+ * Firestore menyimpan satu dokumen per episode, sehingga satu anime yang
+ * ditonton 20 episode dulu memenuhi halaman riwayat dengan 20 kartu yang
+ * mirip. Fungsi ini menyisakan satu kartu per anime (episode terakhir yang
+ * ditonton) plus jumlah episode yang pernah dibuka.
+ */
+export const groupHistoryByAnime = (items = []) => {
+  const map = new Map();
+  items.forEach((item) => {
+    const key = item.animeId || item.animeTitle || item.episodeId;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...item, episodeCount: 1 });
+      return;
+    }
+    existing.episodeCount += 1;
+    // `items` sudah terurut terbaru dulu, jadi entri pertama = paling baru.
+    if (!existing.poster && item.poster) existing.poster = item.poster;
+    if (!existing.animeTitle && item.animeTitle) existing.animeTitle = item.animeTitle;
+  });
+  return Array.from(map.values());
+};
+
 /** Format seconds to mm:ss or hh:mm:ss */
 export const formatTime = (seconds) => {
   if (!seconds || seconds <= 0) return null;
