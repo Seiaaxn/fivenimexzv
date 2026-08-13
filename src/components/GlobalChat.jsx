@@ -5,11 +5,9 @@ import { watchGlobalChat, sendGlobalChatMessage, deleteGlobalChatMessage } from 
 import { isVerifiedEmail } from '../utils/verified';
 import { isPremiumEmail } from '../utils/premium';
 import { isPremiumRole } from '../utils/roles';
-import { levelProgress } from '../utils/levels';
 import { useLiveUsers, withLiveUser } from '../hooks/useLiveUsers';
 import VerifiedBadge from './VerifiedBadge';
 import PremiumBadge from './PremiumBadge';
-import LevelBadge from './LevelBadge';
 import AuthModal from './AuthModal';
 import './GlobalChat.css';
 
@@ -77,7 +75,6 @@ const GlobalChat = ({ fullPage = false }) => {
         displayName: profile?.displayName || user.displayName || 'Pengguna',
         photoURL: profile?.photoURL || user.photoURL || '',
         email: user.email || '',
-        level: levelProgress(profile?.exp || 0).level,
         role: profile?.role || 'user',
         text: body,
         replyTo: replyingTo || null,
@@ -136,7 +133,6 @@ const GlobalChat = ({ fullPage = false }) => {
                     {isVerifiedEmail(m.email) && !isPremiumEmail(m.email) ? null : null}
                     {isPremiumEmail(m.email) && <span className="global-chat__owner-tag">Pemilik</span>}
                     {owner && !isPremiumEmail(m.email) && <span className="global-chat__owner-tag" style={{ background: 'linear-gradient(135deg,#FFD86B,#F5A524)', color: '#7a4400' }}>Premium</span>}
-                    <LevelBadge level={m.level || 1} size="sm" />
                     <span className="global-chat__time">{timeAgo(m.createdAt)}</span>
                   </div>
 
