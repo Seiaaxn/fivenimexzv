@@ -1,12 +1,56 @@
 /**
  * Normalize an anime title for de-duplication across providers.
  * Same anime from different providers may have slightly different titles
- * (whitespace, casing). This produces a stable comparison key.
+ * ("Nonton X Sub Indo", "X BD", "X Episode 12"), so we strip the common
+ * provider prefixes/suffixes and punctuation to get a stable comparison key.
  */
+const STRIP_PATTERNS = [
+  /^(nonton|streaming|download|baca)\s+/,
+  /\b(sub\s?indo(nesia)?|subtitle\s+indonesia|dub\s?indo|softsub|batch|bd|bluray|blu-ray|uncensored|full\s?hd)\b/g,
+  /\bepisode\s*\d+(\s*(end|tamat))?\b/g,
+  /\bep\.?\s*\d+\b/g,
+  /\b(480p|720p|1080p|360p|4k)\b/g,
+];
+
 export const normalizeKey = (item) => {
-  const raw = (item?.title || item?.name || '').toString().toLowerCase();
-  return raw.replace(/\s+/g, ' ').trim();
+  let raw = (item?.title || item?.name || '').toString().toLowerCase();
+  STRIP_PATTERNS.forEach((re) => {
+    raw = raw.replace(re, ' ');
+  });
+  return raw
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
+
+/**
+ * Remove duplicate anime entries that share the same normalized title.
+ * The first occurrence wins; later duplicates only contribute missing
+ * fields (poster, episode, url) and their provider name.
+ */
+export const dedupeByTitle = (list = []) => {
+  const map = new Map();
+  (Array.isArray(list) ? list : []).forEach((item) => {
+    const key = normalizeKey(item);
+    if (!key) return;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...item, providers: item.providers || (item.provider ? [item.provider] : []) });
+      return;
+    }
+    const providers = new Set([...(existing.providers || []), ...(item.providers || []), item.provider].filter(Boolean));
+    map.set(key, {
+      ...item,
+      ...existing,
+      poster: existing.poster || item.poster,
+      image: existing.image || item.image,
+      episode: existing.episode || item.episode,
+      providers: Array.from(providers),
+    });
+  });
+  return Array.from(map.values());
+};
+
 
 /**
  * Merge anime lists from two providers. Items present in both providers are
